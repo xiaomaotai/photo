@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">若里见真</string>
+    <string name="camera_permission_required">需要摄像头权限才能识别物品</string>
+    <string name="grant_permission">授予权限</string>
+    <string name="capture">拍摄</string>
+    <string name="settings">设置</string>
+    <string name="history">历史</string>
+    <string name="recognizing">识别中...</string>
+    <string name="recognition_failed">无法识别该物品</string>
+    <string name="unknown">未知</string>
+    <string name="no_description">暂无描述</string>
+</resources>
