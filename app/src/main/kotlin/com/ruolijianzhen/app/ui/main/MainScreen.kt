@@ -62,9 +62,12 @@ fun MainScreen(
     // 是否正在处理中
     val isProcessing = uiState is MainUiState.Processing
     
-    // 进入页面时重置状态
+    // 进入页面时，只有当前状态是ShowResult或Error时才重置
+    // 避免重置Idle状态导致识别引擎异常
     LaunchedEffect(Unit) {
-        viewModel.dismissResult()
+        if (uiState is MainUiState.ShowResult || uiState is MainUiState.Error) {
+            viewModel.dismissResult()
+        }
     }
     
     // 根据UI状态计算动画状态

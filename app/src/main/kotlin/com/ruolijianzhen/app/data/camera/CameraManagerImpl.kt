@@ -111,10 +111,16 @@ class CameraManagerImpl @Inject constructor(
         
         // 优先使用缓存的最新帧（更快）
         latestFrame?.let { frame ->
-            Log.d(TAG, "Using cached frame for capture")
-            val rotated = rotateBitmap(frame, latestFrameRotation)
-            // 应用缩放裁剪
-            return@withContext applyZoomCrop(rotated, currentZoom)
+            Log.d(TAG, "Using cached frame for capture, size: ${frame.width}x${frame.height}")
+            try {
+                val rotated = rotateBitmap(frame.copy(frame.config ?: Bitmap.Config.ARGB_8888, false), latestFrameRotation)
+                // 应用缩放裁剪
+                val zoomedBitmap = applyZoomCrop(rotated, currentZoom)
+                // 优化：缩放到合理尺寸
+                return@withContext scaleBitmapForRecognition(zoomedBitmap)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to use cached frame", e)
+            }
         }
         
         // 确保ImageCapture已初始化
@@ -123,34 +129,28 @@ class CameraManagerImpl @Inject constructor(
             return@withContext null
         }
         
-        try {
-            // 使用ImageAnalysis快速捕获当前帧
-            suspendCancellableCoroutine { continuation ->
-                val analyzer = object : ImageAnalysis.Analyzer {
-                    override fun analyze(image: ImageProxy) {
-                        try {
-                            val bitmap = imageProxyToBitmap(image)
-                            val rotatedBitmap = rotateBitmap(bitmap, image.imageInfo.rotationDegrees)
-                            // 应用缩放裁剪
-                            val zoomedBitmap = applyZoomCrop(rotatedBitmap, currentZoom)
-                            // 优化：缩放到合理尺寸
-                            val scaledBitmap = scaleBitmapForRecognition(zoomedBitmap)
-                            continuation.resume(scaledBitmap)
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Failed to convert image", e)
-                            continuation.resumeWithException(e)
-                        } finally {
-                            image.close()
-                        }
-                    }
-                }
-                
-                imageAnalysis?.setAnalyzer(cameraExecutor, analyzer)
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to capture image", e)
-            null
+        // 如果没有缓存帧，等待下一帧
+        Log.d(TAG, "No cached frame, waiting for next frame...")
+        var attempts = 0
+        val maxAttempts = 10
+        while (latestFrame == null && attempts < maxAttempts) {
+            kotlinx.coroutines.delay(50)
+            attempts++
         }
+        
+        latestFrame?.let { frame ->
+            Log.d(TAG, "Got frame after waiting, size: ${frame.width}x${frame.height}")
+            try {
+                val rotated = rotateBitmap(frame.copy(frame.config ?: Bitmap.Config.ARGB_8888, false), latestFrameRotation)
+                val zoomedBitmap = applyZoomCrop(rotated, currentZoom)
+                return@withContext scaleBitmapForRecognition(zoomedBitmap)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to process frame", e)
+            }
+        }
+        
+        Log.e(TAG, "Failed to capture image - no frame available")
+        null
     }
     
     /**
