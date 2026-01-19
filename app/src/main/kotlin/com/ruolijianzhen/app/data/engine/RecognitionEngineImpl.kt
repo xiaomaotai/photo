@@ -2,18 +2,23 @@ package com.ruolijianzhen.app.data.engine
 
 import android.graphics.Bitmap
 import android.util.Log
-import android.util.LruCache
 import com.ruolijianzhen.app.domain.ai.UserAiService
 import com.ruolijianzhen.app.domain.api.ApiManager
 import com.ruolijianzhen.app.domain.engine.RecognitionEngine
 import com.ruolijianzhen.app.domain.formatter.ResultFormatter
 import com.ruolijianzhen.app.domain.knowledge.KnowledgeEnhancer
 import com.ruolijianzhen.app.domain.model.ObjectInfo
+import com.ruolijianzhen.app.domain.model.RecognitionAssessment
 import com.ruolijianzhen.app.domain.model.RecognitionMethod
+import com.ruolijianzhen.app.domain.model.RecognitionProgress
+import com.ruolijianzhen.app.domain.model.RecognitionQuality
+import com.ruolijianzhen.app.domain.model.RecognitionSource
+import com.ruolijianzhen.app.domain.model.RecognitionStage
 import com.ruolijianzhen.app.domain.model.RecognitionState
 import com.ruolijianzhen.app.domain.priority.PriorityManager
 import com.ruolijianzhen.app.domain.recognition.OfflineRecognizer
-import com.ruolijianzhen.app.util.PerformanceUtils
+import com.ruolijianzhen.app.util.NetworkUtils
+import com.ruolijianzhen.app.util.PerceptualHash
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,9 +33,10 @@ import javax.inject.Singleton
  * 识别后自动增强知识内容
  * 
  * 性能优化：
- * - 结果缓存（相似图片复用结果）
+ * - 感知哈希缓存（相似图片复用结果）
+ * - 网络状态检测（无网络时跳过在线识别）
+ * - 进度反馈（实时显示识别阶段）
  * - 超时控制
- * - 并行处理
  */
 @Singleton
 class RecognitionEngineImpl @Inject constructor(
@@ -39,41 +45,49 @@ class RecognitionEngineImpl @Inject constructor(
     private val userAiService: UserAiService,
     private val resultFormatter: ResultFormatter,
     private val priorityManager: PriorityManager,
-    private val knowledgeEnhancer: KnowledgeEnhancer
+    private val knowledgeEnhancer: KnowledgeEnhancer,
+    private val networkUtils: NetworkUtils,
+    private val perceptualHash: PerceptualHash
 ) : RecognitionEngine {
     
     companion object {
         private const val TAG = "RecognitionEngine"
         
         // 超时设置（毫秒）
-        private const val TOTAL_TIMEOUT_MS = 12000L     // 总体最大超时12秒（包含知识增强）
-        private const val OFFLINE_TIMEOUT_MS = 1500L    // 本地识别1.5秒
-        private const val API_TIMEOUT_MS = 4000L        // API识别4秒
-        private const val AI_TIMEOUT_MS = 5000L         // AI识别5秒
+        private const val TOTAL_TIMEOUT_MS = 15000L     // 总体最大超时15秒
+        private const val OFFLINE_TIMEOUT_MS = 2000L    // 本地识别2秒
+        private const val API_TIMEOUT_MS = 5000L        // API识别5秒
+        private const val AI_TIMEOUT_MS = 6000L         // AI识别6秒
         private const val KNOWLEDGE_TIMEOUT_MS = 3000L  // 知识增强3秒
-        
-        // 结果缓存大小
-        private const val RESULT_CACHE_SIZE = 20
     }
     
     private val _recognitionState = MutableStateFlow<RecognitionState>(RecognitionState.Idle)
     
-    private var confidenceThreshold = RecognitionEngine.DEFAULT_CONFIDENCE_THRESHOLD
+    // 识别进度
+    private val _recognitionProgress = MutableStateFlow<RecognitionProgress?>(null)
+    val recognitionProgress: StateFlow<RecognitionProgress?> = _recognitionProgress.asStateFlow()
     
-    // 结果缓存（基于图片哈希）
-    private val resultCache = LruCache<String, ObjectInfo>(RESULT_CACHE_SIZE)
+    private var confidenceThreshold = RecognitionEngine.DEFAULT_CONFIDENCE_THRESHOLD
     
     override suspend fun recognize(bitmap: Bitmap): Result<ObjectInfo> {
         _recognitionState.value = RecognitionState.Processing
+        _recognitionProgress.value = RecognitionProgress.preparing()
         
-        // 生成图片缓存键
-        val cacheKey = generateImageHash(bitmap)
-        
-        // 检查缓存
-        resultCache.get(cacheKey)?.let { cachedResult ->
-            Log.d(TAG, "Cache hit for image: ${cachedResult.name}")
-            _recognitionState.value = RecognitionState.Success(cachedResult)
-            return Result.success(cachedResult)
+        // 检查感知哈希缓存
+        val cachedResult = perceptualHash.findSimilarResult(bitmap)
+        if (cachedResult != null) {
+            Log.d(TAG, "Cache hit for similar image: ${cachedResult.result.name}, exact=${cachedResult.isExactMatch}")
+            val result = if (cachedResult.isExactMatch) {
+                cachedResult.result
+            } else {
+                // 相似匹配，稍微降低置信度
+                cachedResult.result.copy(
+                    confidence = cachedResult.result.confidence * 0.95f
+                )
+            }
+            _recognitionProgress.value = RecognitionProgress.completed()
+            _recognitionState.value = RecognitionState.Success(result)
+            return Result.success(result)
         }
         
         return try {
@@ -83,6 +97,7 @@ class RecognitionEngineImpl @Inject constructor(
                 
                 // 如果识别成功，尝试增强知识
                 if (recognitionResult != null) {
+                    _recognitionProgress.value = RecognitionProgress.knowledgeEnhancement()
                     try {
                         withTimeout(KNOWLEDGE_TIMEOUT_MS) {
                             knowledgeEnhancer.enhance(recognitionResult)
@@ -98,59 +113,87 @@ class RecognitionEngineImpl @Inject constructor(
             
             if (result != null) {
                 // 缓存结果
-                resultCache.put(cacheKey, result)
+                perceptualHash.cacheResult(bitmap, result)
                 
+                _recognitionProgress.value = RecognitionProgress.completed()
                 _recognitionState.value = RecognitionState.Success(result)
                 Result.success(result)
             } else {
                 val error = "无法识别该物品，请尝试调整角度或光线后重试"
+                _recognitionProgress.value = RecognitionProgress.failed(error)
                 _recognitionState.value = RecognitionState.Error(error)
                 Result.failure(RecognitionException(error))
             }
         } catch (e: TimeoutCancellationException) {
             Log.w(TAG, "Recognition timeout after ${TOTAL_TIMEOUT_MS}ms")
             val errorMessage = "识别超时，请重试"
+            _recognitionProgress.value = RecognitionProgress.failed(errorMessage)
             _recognitionState.value = RecognitionState.Error(errorMessage)
             Result.failure(RecognitionException(errorMessage))
         } catch (e: Exception) {
             Log.e(TAG, "Recognition failed", e)
             val errorMessage = "识别过程出错：${e.message ?: "未知错误"}"
+            _recognitionProgress.value = RecognitionProgress.failed(errorMessage)
             _recognitionState.value = RecognitionState.Error(errorMessage)
             Result.failure(RecognitionException(errorMessage, e))
         }
     }
-    
-    /**
-     * 生成图片哈希（用于缓存键）
-     * 使用简化的哈希算法，平衡速度和准确性
-     */
-    private fun generateImageHash(bitmap: Bitmap): String {
-        return try {
-            PerformanceUtils.generateCacheKey(bitmap)
-        } catch (e: Exception) {
-            "${bitmap.width}_${bitmap.height}_${System.currentTimeMillis()}"
-        }
-    }
-
 
     /**
      * 按用户配置的优先级执行识别策略
-     * 优化：快速返回高置信度结果，低置信度时继续尝试
-     * 改进：即使置信度低也返回结果，不要返回null
+     * 优化：
+     * - 快速返回高置信度结果
+     * - 网络不可用时跳过在线识别
+     * - 实时进度反馈
      */
     private suspend fun executeRecognitionStrategy(bitmap: Bitmap): ObjectInfo? {
         val enabledMethods = priorityManager.getEnabledMethodsInOrder()
         Log.d(TAG, "Recognition order: ${enabledMethods.map { it.name }}")
         
+        // 检查网络状态
+        val isNetworkAvailable = networkUtils.isNetworkAvailable()
+        Log.d(TAG, "Network available: $isNetworkAvailable")
+        
         var fallbackResult: ObjectInfo? = null
         val startTime = System.currentTimeMillis()
+        val attemptedMethods = mutableListOf<RecognitionMethod>()
         
         for (method in enabledMethods) {
             // 检查剩余时间
             val elapsed = System.currentTimeMillis() - startTime
-            if (elapsed > TOTAL_TIMEOUT_MS - 500) {
+            if (elapsed > TOTAL_TIMEOUT_MS - 1000) {
                 Log.d(TAG, "Time running out, returning current result")
                 break
+            }
+            
+            // 如果是在线方法但网络不可用，跳过
+            if (!isNetworkAvailable && (method == RecognitionMethod.BAIDU_API || method == RecognitionMethod.USER_AI)) {
+                Log.d(TAG, "Skipping ${method.name} due to no network")
+                continue
+            }
+            
+            attemptedMethods.add(method)
+            
+            // 更新进度
+            _recognitionProgress.value = when (method) {
+                RecognitionMethod.OFFLINE -> RecognitionProgress(
+                    stage = RecognitionStage.OFFLINE_RECOGNITION,
+                    currentMethod = method,
+                    attemptedMethods = attemptedMethods.toList(),
+                    message = "正在进行本地识别..."
+                )
+                RecognitionMethod.BAIDU_API -> RecognitionProgress(
+                    stage = RecognitionStage.API_RECOGNITION,
+                    currentMethod = method,
+                    attemptedMethods = attemptedMethods.toList(),
+                    message = "正在调用云端API..."
+                )
+                RecognitionMethod.USER_AI -> RecognitionProgress(
+                    stage = RecognitionStage.AI_RECOGNITION,
+                    currentMethod = method,
+                    attemptedMethods = attemptedMethods.toList(),
+                    message = "正在使用AI分析..."
+                )
             }
             
             val result = when (method) {
@@ -163,10 +206,19 @@ class RecognitionEngineImpl @Inject constructor(
                 val methodTime = System.currentTimeMillis() - startTime
                 Log.d(TAG, "${method.name} completed in ${methodTime}ms, confidence: ${result.confidence}")
                 
-                // 如果置信度足够高，直接返回
-                if (result.confidence >= confidenceThreshold) {
+                // 评估结果质量
+                val assessment = RecognitionAssessment.assess(result.confidence, result.source)
+                
+                // 如果是高质量结果，直接返回
+                if (assessment.quality == RecognitionQuality.HIGH) {
                     return result
                 }
+                
+                // 如果是中等质量且置信度足够，也可以返回
+                if (assessment.quality == RecognitionQuality.MEDIUM && result.confidence >= confidenceThreshold) {
+                    return result
+                }
+                
                 // 保存低置信度结果作为备选（选择置信度最高的）
                 if (fallbackResult == null || result.confidence > fallbackResult.confidence) {
                     fallbackResult = result
@@ -176,7 +228,7 @@ class RecognitionEngineImpl @Inject constructor(
             }
         }
         
-        // 返回最佳的备选结果（即使置信度低也返回，让用户看到结果）
+        // 返回最佳的备选结果
         if (fallbackResult != null) {
             Log.d(TAG, "Returning fallback result: ${fallbackResult.name} with confidence: ${fallbackResult.confidence}")
         } else {
@@ -254,6 +306,7 @@ class RecognitionEngineImpl @Inject constructor(
     
     override fun resetState() {
         _recognitionState.value = RecognitionState.Idle
+        _recognitionProgress.value = null
     }
     
     override fun getConfidenceThreshold(): Float = confidenceThreshold
@@ -269,9 +322,14 @@ class RecognitionEngineImpl @Inject constructor(
      * 清除结果缓存
      */
     fun clearCache() {
-        resultCache.evictAll()
+        perceptualHash.clearCache()
         Log.d(TAG, "Recognition result cache cleared")
     }
+    
+    /**
+     * 获取缓存统计
+     */
+    fun getCacheStats() = perceptualHash.getCacheStats()
 }
 
 /**

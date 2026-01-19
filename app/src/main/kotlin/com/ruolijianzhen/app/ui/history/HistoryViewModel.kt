@@ -6,14 +6,13 @@ import com.ruolijianzhen.app.data.history.HistoryRepositoryImpl
 import com.ruolijianzhen.app.domain.history.HistoryItem
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.*
 import javax.inject.Inject
 
 /**
- * 历史记录页面ViewModel - 支持搜索和筛选
+ * 历史记录页面ViewModel - 支持搜索、筛选和批量操作
  */
 @HiltViewModel
 class HistoryViewModel @Inject constructor(
@@ -34,6 +33,17 @@ class HistoryViewModel @Inject constructor(
     
     private val _categories = MutableStateFlow<List<String>>(emptyList())
     val categories: StateFlow<List<String>> = _categories.asStateFlow()
+    
+    // 批量选择模式
+    private val _isSelectionMode = MutableStateFlow(false)
+    val isSelectionMode: StateFlow<Boolean> = _isSelectionMode.asStateFlow()
+    
+    // 已选择的项目ID
+    private val _selectedIds = MutableStateFlow<Set<String>>(emptySet())
+    val selectedIds: StateFlow<Set<String>> = _selectedIds.asStateFlow()
+    
+    // 当前所有项目（用于全选）
+    private var allItems: List<HistoryItem> = emptyList()
     
     private var searchJob: Job? = null
     
@@ -69,6 +79,7 @@ class HistoryViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val groupedHistory = historyRepository.getGroupedByDateSync()
+                allItems = groupedHistory.values.flatten()
                 if (groupedHistory.isEmpty()) {
                     _uiState.value = HistoryUiState.Empty
                 } else {
@@ -96,6 +107,7 @@ class HistoryViewModel @Inject constructor(
                 }
                 
                 flow.collect { items ->
+                    allItems = items
                     if (items.isEmpty()) {
                         _uiState.value = HistoryUiState.Empty
                     } else {
@@ -169,7 +181,11 @@ class HistoryViewModel @Inject constructor(
      * 选择历史记录项
      */
     fun selectItem(item: HistoryItem) {
-        _selectedItem.value = item
+        if (_isSelectionMode.value) {
+            toggleItemSelection(item.id)
+        } else {
+            _selectedItem.value = item
+        }
     }
     
     /**
@@ -178,6 +194,122 @@ class HistoryViewModel @Inject constructor(
     fun clearSelection() {
         _selectedItem.value = null
     }
+    
+    // ========== 批量操作功能 ==========
+    
+    /**
+     * 进入批量选择模式
+     */
+    fun enterSelectionMode() {
+        _isSelectionMode.value = true
+        _selectedIds.value = emptySet()
+    }
+    
+    /**
+     * 退出批量选择模式
+     */
+    fun exitSelectionMode() {
+        _isSelectionMode.value = false
+        _selectedIds.value = emptySet()
+    }
+    
+    /**
+     * 切换单个项目的选择状态
+     */
+    fun toggleItemSelection(id: String) {
+        val currentSelection = _selectedIds.value.toMutableSet()
+        if (currentSelection.contains(id)) {
+            currentSelection.remove(id)
+        } else {
+            currentSelection.add(id)
+        }
+        _selectedIds.value = currentSelection
+        
+        // 如果没有选中任何项目，退出选择模式
+        if (currentSelection.isEmpty()) {
+            _isSelectionMode.value = false
+        }
+    }
+    
+    /**
+     * 全选
+     */
+    fun selectAll() {
+        _selectedIds.value = allItems.map { it.id }.toSet()
+    }
+    
+    /**
+     * 取消全选
+     */
+    fun deselectAll() {
+        _selectedIds.value = emptySet()
+    }
+    
+    /**
+     * 批量删除选中项
+     */
+    fun deleteSelected() {
+        viewModelScope.launch {
+            try {
+                val idsToDelete = _selectedIds.value.toList()
+                idsToDelete.forEach { id ->
+                    historyRepository.delete(id)
+                }
+                exitSelectionMode()
+                refresh()
+            } catch (e: Exception) {
+                _uiState.value = HistoryUiState.Error("批量删除失败: ${e.message}")
+            }
+        }
+    }
+    
+    /**
+     * 批量收藏选中项
+     */
+    fun favoriteSelected() {
+        viewModelScope.launch {
+            try {
+                val idsToFavorite = _selectedIds.value.toList()
+                idsToFavorite.forEach { id ->
+                    historyRepository.updateFavorite(id, true)
+                }
+                exitSelectionMode()
+                refresh()
+            } catch (e: Exception) {
+                // 忽略错误
+            }
+        }
+    }
+    
+    /**
+     * 批量取消收藏选中项
+     */
+    fun unfavoriteSelected() {
+        viewModelScope.launch {
+            try {
+                val idsToUnfavorite = _selectedIds.value.toList()
+                idsToUnfavorite.forEach { id ->
+                    historyRepository.updateFavorite(id, false)
+                }
+                exitSelectionMode()
+                refresh()
+            } catch (e: Exception) {
+                // 忽略错误
+            }
+        }
+    }
+    
+    /**
+     * 获取选中项数量
+     */
+    fun getSelectedCount(): Int = _selectedIds.value.size
+    
+    /**
+     * 检查是否全选
+     */
+    fun isAllSelected(): Boolean = _selectedIds.value.size == allItems.size && allItems.isNotEmpty()
+    
+    // ========== 原有功能 ==========
     
     /**
      * 删除历史记录
