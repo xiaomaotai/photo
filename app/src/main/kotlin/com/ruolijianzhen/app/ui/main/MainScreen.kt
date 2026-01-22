@@ -26,26 +26,23 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.ruolijianzhen.app.ui.animation.AdvancedScanningAnimation
 import com.ruolijianzhen.app.ui.animation.ScanningAnimationState
-import com.ruolijianzhen.app.ui.camera.CameraGuideType
 import com.ruolijianzhen.app.ui.camera.CameraPreview
-import com.ruolijianzhen.app.ui.camera.CameraViewfinder
 import com.ruolijianzhen.app.ui.camera.FocusAnimationIndicator
 import com.ruolijianzhen.app.ui.camera.GridOverlay
-import com.ruolijianzhen.app.ui.camera.ViewfinderStyle
 import com.ruolijianzhen.app.ui.components.CompactProgressIndicator
-import com.ruolijianzhen.app.ui.components.RecognitionProgressIndicator
 import com.ruolijianzhen.app.ui.util.CameraPermissionRequest
 import com.ruolijianzhen.app.ui.util.PermissionUtils
 import com.ruolijianzhen.app.util.NetworkStatus
 
 /**
  * 主界面（相机识别页面）
- * 全屏沉浸式设计，顶部悬浮工具栏
+ * 全屏沉浸式设计，顶部精简工具栏
  * 支持相机拍摄和本地图片选择
  */
 @Composable
@@ -70,9 +67,6 @@ fun MainScreen(
     // 网格显示状态
     var showGrid by remember { mutableStateOf(false) }
     
-    // 取景框显示状态
-    var showViewfinder by remember { mutableStateOf(true) }
-    
     // 缩放比例状态
     var currentZoom by remember { mutableFloatStateOf(1f) }
     
@@ -81,6 +75,9 @@ fun MainScreen(
     
     // 对焦动画位置
     var focusPosition by remember { mutableStateOf<Offset?>(null) }
+    
+    // 更多菜单展开状态
+    var showMoreMenu by remember { mutableStateOf(false) }
     
     // 是否正在处理中
     val isProcessing = uiState is MainUiState.Processing
@@ -113,18 +110,6 @@ fun MainScreen(
             }
         }
     }
-    
-    // 识别中文字动画
-    val infiniteTransition = rememberInfiniteTransition(label = "processing")
-    val dotAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(600, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "dotAlpha"
-    )
     
     // 权限请求
     if (!hasPermission && !showPermissionDenied) {
@@ -172,17 +157,6 @@ fun MainScreen(
                     if (showGrid) {
                         GridOverlay(modifier = Modifier.fillMaxSize())
                     }
-                    
-                    // 取景框
-                    if (showViewfinder) {
-                        CameraViewfinder(
-                            modifier = Modifier.fillMaxSize(),
-                            style = ViewfinderStyle.CORNERS,
-                            guideType = CameraGuideType.NORMAL,
-                            isProcessing = isProcessing,
-                            showGuideText = !isProcessing
-                        )
-                    }
                 }
                 
                 // 对焦动画
@@ -194,7 +168,7 @@ fun MainScreen(
                 }
             }
             
-            // 顶部渐变遮罩 + 悬浮工具栏
+            // 顶部渐变遮罩 + 精简工具栏
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -207,7 +181,7 @@ fun MainScreen(
                         )
                     )
                     .statusBarsPadding()
-                    .padding(horizontal = 8.dp, vertical = 8.dp)
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -218,47 +192,23 @@ fun MainScreen(
                     IconButton(
                         onClick = onNavigateBack,
                         modifier = Modifier
-                            .size(44.dp)
+                            .size(40.dp)
                             .background(Color.Black.copy(alpha = 0.3f), CircleShape)
                     ) {
                         Icon(
                             Icons.Default.ArrowBack,
                             contentDescription = "返回",
-                            tint = Color.White
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                     
-                    // 右侧工具按钮组
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        // 取景框开关
-                        IconButton(
-                            onClick = { showViewfinder = !showViewfinder },
-                            modifier = Modifier
-                                .size(44.dp)
-                                .background(
-                                    if (showViewfinder) Color.White.copy(alpha = 0.3f) 
-                                    else Color.Black.copy(alpha = 0.3f),
-                                    CircleShape
-                                )
-                        ) {
-                            Icon(Icons.Default.CropFree, "取景框", tint = Color.White)
-                        }
-                        
-                        // 网格按钮
-                        IconButton(
-                            onClick = { showGrid = !showGrid },
-                            modifier = Modifier
-                                .size(44.dp)
-                                .background(
-                                    if (showGrid) Color.White.copy(alpha = 0.3f) 
-                                    else Color.Black.copy(alpha = 0.3f),
-                                    CircleShape
-                                )
-                        ) {
-                            Icon(Icons.Default.GridOn, "网格", tint = Color.White)
-                        }
-                        
-                        // 闪光灯按钮
+                    // 右侧精简工具按钮组
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // 闪光灯按钮（常用功能保留）
                         if (!isFrontCamera) {
                             IconButton(
                                 onClick = { 
@@ -267,7 +217,7 @@ fun MainScreen(
                                 },
                                 enabled = !isProcessing,
                                 modifier = Modifier
-                                    .size(44.dp)
+                                    .size(40.dp)
                                     .background(
                                         if (isFlashOn) Color(0xFFFFD700).copy(alpha = 0.5f)
                                         else Color.Black.copy(alpha = 0.3f),
@@ -277,47 +227,139 @@ fun MainScreen(
                                 Icon(
                                     if (isFlashOn) Icons.Default.FlashOn else Icons.Default.FlashOff,
                                     "闪光灯",
-                                    tint = if (isProcessing) Color.White.copy(alpha = 0.5f) else Color.White
+                                    tint = if (isProcessing) Color.White.copy(alpha = 0.5f) else Color.White,
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
                         }
                         
-                        // 切换摄像头
-                        IconButton(
-                            onClick = { 
-                                viewModel.switchCamera()
-                                isFrontCamera = !isFrontCamera
-                                if (isFrontCamera && isFlashOn) {
-                                    isFlashOn = false
-                                    viewModel.setFlashEnabled(false)
-                                }
-                            },
-                            enabled = !isProcessing,
-                            modifier = Modifier
-                                .size(44.dp)
-                                .background(Color.Black.copy(alpha = 0.3f), CircleShape)
-                        ) {
-                            Icon(Icons.Default.Cameraswitch, "切换", tint = Color.White)
-                        }
-                        
-                        // 历史记录
-                        IconButton(
-                            onClick = onNavigateToHistory,
-                            modifier = Modifier
-                                .size(44.dp)
-                                .background(Color.Black.copy(alpha = 0.3f), CircleShape)
-                        ) {
-                            Icon(Icons.Default.History, "历史", tint = Color.White)
-                        }
-                        
-                        // 设置
-                        IconButton(
-                            onClick = onNavigateToSettings,
-                            modifier = Modifier
-                                .size(44.dp)
-                                .background(Color.Black.copy(alpha = 0.3f), CircleShape)
-                        ) {
-                            Icon(Icons.Default.Settings, "设置", tint = Color.White)
+                        // 更多菜单按钮
+                        Box {
+                            IconButton(
+                                onClick = { showMoreMenu = true },
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .background(Color.Black.copy(alpha = 0.3f), CircleShape)
+                            ) {
+                                Icon(
+                                    Icons.Default.MoreVert,
+                                    "更多",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            
+                            // 下拉菜单
+                            DropdownMenu(
+                                expanded = showMoreMenu,
+                                onDismissRequest = { showMoreMenu = false },
+                                offset = DpOffset(0.dp, 4.dp),
+                                modifier = Modifier.background(
+                                    MaterialTheme.colorScheme.surface,
+                                    RoundedCornerShape(12.dp)
+                                )
+                            ) {
+                                // 网格开关
+                                DropdownMenuItem(
+                                    text = { 
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                        ) {
+                                            Icon(
+                                                Icons.Default.GridOn,
+                                                null,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                            Text("构图网格")
+                                            Spacer(Modifier.weight(1f))
+                                            if (showGrid) {
+                                                Icon(
+                                                    Icons.Default.Check,
+                                                    null,
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            }
+                                        }
+                                    },
+                                    onClick = { 
+                                        showGrid = !showGrid
+                                        showMoreMenu = false
+                                    }
+                                )
+                                
+                                // 切换摄像头
+                                DropdownMenuItem(
+                                    text = { 
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Cameraswitch,
+                                                null,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                            Text(if (isFrontCamera) "切换到后置" else "切换到前置")
+                                        }
+                                    },
+                                    onClick = { 
+                                        viewModel.switchCamera()
+                                        isFrontCamera = !isFrontCamera
+                                        if (isFrontCamera && isFlashOn) {
+                                            isFlashOn = false
+                                            viewModel.setFlashEnabled(false)
+                                        }
+                                        showMoreMenu = false
+                                    },
+                                    enabled = !isProcessing
+                                )
+                                
+                                Divider(modifier = Modifier.padding(vertical = 4.dp))
+                                
+                                // 历史记录
+                                DropdownMenuItem(
+                                    text = { 
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                        ) {
+                                            Icon(
+                                                Icons.Default.History,
+                                                null,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                            Text("识别历史")
+                                        }
+                                    },
+                                    onClick = { 
+                                        showMoreMenu = false
+                                        onNavigateToHistory()
+                                    }
+                                )
+                                
+                                // 设置
+                                DropdownMenuItem(
+                                    text = { 
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Settings,
+                                                null,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                            Text("设置")
+                                        }
+                                    },
+                                    onClick = { 
+                                        showMoreMenu = false
+                                        onNavigateToSettings()
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -353,17 +395,9 @@ fun MainScreen(
                 )
             }
             
-            // 高级扫描动画
-            AdvancedScanningAnimation(state = animationState, modifier = Modifier.fillMaxSize())
-            
-            // 识别进度指示器（处理中显示）
-            if (isProcessing && recognitionProgress != null) {
-                RecognitionProgressIndicator(
-                    progress = recognitionProgress,
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .padding(bottom = 100.dp)
-                )
+            // 高级扫描动画（仅在处理中显示）
+            if (isProcessing || animationState == ScanningAnimationState.Success || animationState == ScanningAnimationState.Error) {
+                AdvancedScanningAnimation(state = animationState, modifier = Modifier.fillMaxSize())
             }
             
             // 底部渐变遮罩 + 识别按钮

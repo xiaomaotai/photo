@@ -24,6 +24,11 @@ import kotlin.random.Random
 /**
  * 高级扫描动画组件
  * 提供粒子效果、光波扩散、AI风格动画等炫酷效果
+ * 
+ * 优化：
+ * - 更流畅的动画过渡
+ * - 更炫酷的视觉效果
+ * - 性能优化
  */
 @Composable
 fun AdvancedScanningAnimation(
@@ -48,6 +53,9 @@ private data class Particle(
     val color: Color
 )
 
+/**
+ * 粒子聚集动画 - 扫描状态
+ */
 @Composable
 private fun ParticleGatherAnimation(modifier: Modifier = Modifier) {
     val infiniteTransition = rememberInfiniteTransition(label = "gather")
@@ -125,54 +133,122 @@ private fun ParticleGatherAnimation(modifier: Modifier = Modifier) {
     }
 }
 
+/**
+ * AI处理动画 - 识别中状态
+ * 炫酷的科技感动画效果
+ */
 @Composable
 private fun AIProcessingAnimation(modifier: Modifier = Modifier) {
     val infiniteTransition = rememberInfiniteTransition(label = "ai")
     
+    // 扫描线位置
     val scanProgress by infiniteTransition.animateFloat(
         initialValue = 0f, targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(1500, easing = LinearEasing), RepeatMode.Restart),
+        animationSpec = infiniteRepeatable(tween(1200, easing = LinearEasing), RepeatMode.Restart),
         label = "scanProgress"
     )
+    
+    // 外圈旋转
     val outerRotation by infiniteTransition.animateFloat(
         initialValue = 0f, targetValue = 360f,
         animationSpec = infiniteRepeatable(tween(3000, easing = LinearEasing), RepeatMode.Restart),
         label = "outerRotation"
     )
+    
+    // 内圈反向旋转
     val innerRotation by infiniteTransition.animateFloat(
         initialValue = 360f, targetValue = 0f,
         animationSpec = infiniteRepeatable(tween(2000, easing = LinearEasing), RepeatMode.Restart),
         label = "innerRotation"
     )
+    
+    // 数据流动画
     val dataFlow by infiniteTransition.animateFloat(
         initialValue = 0f, targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(800, easing = LinearEasing), RepeatMode.Restart),
+        animationSpec = infiniteRepeatable(tween(600, easing = LinearEasing), RepeatMode.Restart),
         label = "dataFlow"
     )
+    
+    // 脉冲效果
     val pulse by infiniteTransition.animateFloat(
-        initialValue = 0.9f, targetValue = 1.1f,
-        animationSpec = infiniteRepeatable(tween(600, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        initialValue = 0.85f, targetValue = 1.15f,
+        animationSpec = infiniteRepeatable(tween(400, easing = FastOutSlowInEasing), RepeatMode.Reverse),
         label = "pulse"
+    )
+    
+    // 光环扩散
+    val haloExpand by infiniteTransition.animateFloat(
+        initialValue = 0f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(1500, easing = LinearOutSlowInEasing), RepeatMode.Restart),
+        label = "haloExpand"
     )
     
     val primaryColor = MaterialTheme.colorScheme.primary
     val secondaryColor = MaterialTheme.colorScheme.secondary
+    val tertiaryColor = MaterialTheme.colorScheme.tertiary
     
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Canvas(modifier = Modifier.size(320.dp)) {
             val center = Offset(size.width / 2, size.height / 2)
             val frameSize = size.minDimension * 0.75f
             
+            // 绘制扩散光环
+            drawExpandingHalo(center, frameSize, haloExpand, primaryColor)
+            
+            // 绘制科技感边框
             drawTechFrame(center, frameSize, outerRotation, primaryColor, secondaryColor)
-            drawInnerRings(center, frameSize * 0.6f, innerRotation, primaryColor)
+            
+            // 绘制内圈
+            drawInnerRings(center, frameSize * 0.6f, innerRotation, primaryColor, tertiaryColor)
+            
+            // 绘制扫描线
             drawScanLine(center, frameSize, scanProgress, primaryColor)
+            
+            // 绘制数据流点
             drawDataFlowPoints(center, frameSize * 0.4f, dataFlow, primaryColor, secondaryColor)
-            drawAICore(center, frameSize * 0.15f * pulse, primaryColor)
+            
+            // 绘制AI核心
+            drawAICore(center, frameSize * 0.15f * pulse, primaryColor, tertiaryColor)
+            
+            // 绘制神经网络连接
             drawNeuralConnections(center, frameSize * 0.35f, dataFlow, primaryColor)
+            
+            // 绘制能量粒子
+            drawEnergyParticles(center, frameSize * 0.5f, dataFlow, primaryColor, secondaryColor)
         }
     }
 }
 
+/**
+ * 绘制扩散光环
+ */
+private fun DrawScope.drawExpandingHalo(center: Offset, frameSize: Float, progress: Float, color: Color) {
+    val alpha = (1f - progress) * 0.3f
+    val radius = frameSize * 0.4f + frameSize * 0.3f * progress
+    
+    drawCircle(
+        color = color.copy(alpha = alpha),
+        radius = radius,
+        center = center,
+        style = Stroke(width = 2.dp.toPx())
+    )
+    
+    // 第二层光环（延迟）
+    val progress2 = (progress + 0.5f) % 1f
+    val alpha2 = (1f - progress2) * 0.2f
+    val radius2 = frameSize * 0.4f + frameSize * 0.3f * progress2
+    
+    drawCircle(
+        color = color.copy(alpha = alpha2),
+        radius = radius2,
+        center = center,
+        style = Stroke(width = 1.5.dp.toPx())
+    )
+}
+
+/**
+ * 绘制科技感边框
+ */
 private fun DrawScope.drawTechFrame(center: Offset, frameSize: Float, rotation: Float, primaryColor: Color, secondaryColor: Color) {
     val cornerLength = frameSize * 0.2f
     val strokeWidth = 3.dp.toPx()
@@ -184,6 +260,7 @@ private fun DrawScope.drawTechFrame(center: Offset, frameSize: Float, rotation: 
             center = center
         )
         
+        // 四个角的线条
         listOf(
             Pair(Offset(center.x - halfFrame, center.y - halfFrame + cornerLength), Offset(center.x - halfFrame, center.y - halfFrame)),
             Pair(Offset(center.x - halfFrame, center.y - halfFrame), Offset(center.x - halfFrame + cornerLength, center.y - halfFrame)),
@@ -197,47 +274,71 @@ private fun DrawScope.drawTechFrame(center: Offset, frameSize: Float, rotation: 
             drawLine(gradientBrush, start, end, strokeWidth, StrokeCap.Round)
         }
         
+        // 四个方向的装饰点
         listOf(
             Offset(center.x, center.y - halfFrame), Offset(center.x + halfFrame, center.y),
             Offset(center.x, center.y + halfFrame), Offset(center.x - halfFrame, center.y)
-        ).forEach { drawCircle(primaryColor, 4.dp.toPx(), it) }
+        ).forEach { 
+            drawCircle(primaryColor, 4.dp.toPx(), it) 
+            drawCircle(primaryColor.copy(alpha = 0.3f), 8.dp.toPx(), it)
+        }
     }
 }
 
-private fun DrawScope.drawInnerRings(center: Offset, radius: Float, rotation: Float, color: Color) {
+/**
+ * 绘制内圈
+ */
+private fun DrawScope.drawInnerRings(center: Offset, radius: Float, rotation: Float, primaryColor: Color, tertiaryColor: Color) {
     rotate(rotation, pivot = center) {
+        // 分段圆弧
         for (i in 0 until 24) {
             if (i % 2 == 0) {
+                val color = if (i % 4 == 0) primaryColor else tertiaryColor
                 drawArc(color.copy(alpha = 0.6f), i * 15f, 8f, false,
                     Offset(center.x - radius, center.y - radius), Size(radius * 2, radius * 2),
                     style = Stroke(2.dp.toPx(), cap = StrokeCap.Round))
             }
         }
     }
-    drawCircle(color.copy(alpha = 0.3f), radius * 0.7f, center, style = Stroke(1.dp.toPx()))
+    
+    // 内圈虚线
+    drawCircle(primaryColor.copy(alpha = 0.3f), radius * 0.7f, center, style = Stroke(1.dp.toPx()))
+    drawCircle(tertiaryColor.copy(alpha = 0.2f), radius * 0.5f, center, style = Stroke(1.dp.toPx()))
 }
 
+/**
+ * 绘制扫描线
+ */
 private fun DrawScope.drawScanLine(center: Offset, frameSize: Float, progress: Float, color: Color) {
     val halfFrame = frameSize / 2
     val scanY = center.y - halfFrame + frameSize * progress
     
+    // 主扫描线
     drawLine(
         Brush.horizontalGradient(
             listOf(Color.Transparent, color.copy(alpha = 0.8f), color, color.copy(alpha = 0.8f), Color.Transparent),
             center.x - halfFrame, center.x + halfFrame
         ),
-        Offset(center.x - halfFrame * 0.8f, scanY), Offset(center.x + halfFrame * 0.8f, scanY), 2.dp.toPx()
+        Offset(center.x - halfFrame * 0.8f, scanY), Offset(center.x + halfFrame * 0.8f, scanY), 3.dp.toPx()
     )
     
+    // 扫描线光晕
     drawRect(
         Brush.verticalGradient(
-            listOf(Color.Transparent, color.copy(alpha = 0.15f), color.copy(alpha = 0.25f), color.copy(alpha = 0.15f), Color.Transparent),
-            scanY - 40.dp.toPx(), scanY + 15.dp.toPx()
+            listOf(Color.Transparent, color.copy(alpha = 0.1f), color.copy(alpha = 0.2f), color.copy(alpha = 0.1f), Color.Transparent),
+            scanY - 50.dp.toPx(), scanY + 20.dp.toPx()
         ),
-        Offset(center.x - halfFrame * 0.8f, scanY - 40.dp.toPx()), Size(halfFrame * 1.6f, 55.dp.toPx())
+        Offset(center.x - halfFrame * 0.8f, scanY - 50.dp.toPx()), Size(halfFrame * 1.6f, 70.dp.toPx())
     )
+    
+    // 扫描线两端的发光点
+    drawCircle(color.copy(alpha = 0.8f), 4.dp.toPx(), Offset(center.x - halfFrame * 0.8f, scanY))
+    drawCircle(color.copy(alpha = 0.8f), 4.dp.toPx(), Offset(center.x + halfFrame * 0.8f, scanY))
 }
 
+/**
+ * 绘制数据流点
+ */
 private fun DrawScope.drawDataFlowPoints(center: Offset, radius: Float, progress: Float, primaryColor: Color, secondaryColor: Color) {
     for (i in 0 until 8) {
         val adjustedProgress = (progress + i * 0.1f) % 1f
@@ -248,23 +349,40 @@ private fun DrawScope.drawDataFlowPoints(center: Offset, radius: Float, progress
         val alpha = (1f - adjustedProgress).coerceIn(0.2f, 1f)
         val pointColor = if (i % 2 == 0) primaryColor else secondaryColor
         
-        drawCircle(pointColor.copy(alpha = alpha * 0.3f), 8.dp.toPx(), Offset(x, y))
-        drawCircle(pointColor.copy(alpha = alpha), 4.dp.toPx(), Offset(x, y))
+        drawCircle(pointColor.copy(alpha = alpha * 0.3f), 10.dp.toPx(), Offset(x, y))
+        drawCircle(pointColor.copy(alpha = alpha), 5.dp.toPx(), Offset(x, y))
     }
 }
 
-private fun DrawScope.drawAICore(center: Offset, radius: Float, color: Color) {
+/**
+ * 绘制AI核心
+ */
+private fun DrawScope.drawAICore(center: Offset, radius: Float, primaryColor: Color, tertiaryColor: Color) {
+    // 外层光晕
     drawCircle(
-        Brush.radialGradient(listOf(color.copy(alpha = 0.6f), color.copy(alpha = 0.2f), Color.Transparent), center, radius * 2),
-        radius * 2, center
+        Brush.radialGradient(listOf(primaryColor.copy(alpha = 0.5f), primaryColor.copy(alpha = 0.2f), Color.Transparent), center, radius * 2.5f),
+        radius * 2.5f, center
     )
+    
+    // 中层渐变
     drawCircle(
-        Brush.radialGradient(listOf(Color.White.copy(alpha = 0.9f), color.copy(alpha = 0.8f), color.copy(alpha = 0.4f)), center, radius),
+        Brush.radialGradient(listOf(tertiaryColor.copy(alpha = 0.6f), primaryColor.copy(alpha = 0.4f), Color.Transparent), center, radius * 1.5f),
+        radius * 1.5f, center
+    )
+    
+    // 核心
+    drawCircle(
+        Brush.radialGradient(listOf(Color.White.copy(alpha = 0.95f), primaryColor.copy(alpha = 0.8f), primaryColor.copy(alpha = 0.5f)), center, radius),
         radius, center
     )
-    drawCircle(Color.White.copy(alpha = 0.8f), radius, center, style = Stroke(2.dp.toPx()))
+    
+    // 核心边框
+    drawCircle(Color.White.copy(alpha = 0.9f), radius, center, style = Stroke(2.dp.toPx()))
 }
 
+/**
+ * 绘制神经网络连接
+ */
 private fun DrawScope.drawNeuralConnections(center: Offset, radius: Float, progress: Float, color: Color) {
     val nodes = List(6) { i ->
         val angle = Math.toRadians((i * 60.0) + 30)
@@ -272,13 +390,41 @@ private fun DrawScope.drawNeuralConnections(center: Offset, radius: Float, progr
     }
     
     nodes.forEachIndexed { i, node ->
-        val lineAlpha = (sin(((progress * 2 + i * 0.1f) % 1f) * PI).toFloat() * 0.5f).coerceIn(0.1f, 0.5f)
-        drawLine(color.copy(alpha = lineAlpha), center, node, 1.dp.toPx())
-        drawLine(color.copy(alpha = lineAlpha * 0.5f), node, nodes[(i + 1) % 6], 0.5.dp.toPx())
-        drawCircle(color.copy(alpha = 0.6f + lineAlpha), 3.dp.toPx(), node)
+        val lineAlpha = (sin(((progress * 2 + i * 0.15f) % 1f) * PI).toFloat() * 0.6f).coerceIn(0.1f, 0.6f)
+        
+        // 连接到中心
+        drawLine(color.copy(alpha = lineAlpha), center, node, 1.5.dp.toPx())
+        
+        // 连接到相邻节点
+        drawLine(color.copy(alpha = lineAlpha * 0.5f), node, nodes[(i + 1) % 6], 1.dp.toPx())
+        
+        // 节点
+        drawCircle(color.copy(alpha = 0.3f), 8.dp.toPx(), node)
+        drawCircle(color.copy(alpha = 0.7f + lineAlpha * 0.3f), 4.dp.toPx(), node)
     }
 }
 
+/**
+ * 绘制能量粒子
+ */
+private fun DrawScope.drawEnergyParticles(center: Offset, radius: Float, progress: Float, primaryColor: Color, secondaryColor: Color) {
+    for (i in 0 until 12) {
+        val particleProgress = (progress + i * 0.08f) % 1f
+        val angle = Math.toRadians((i * 30.0) + progress * 360)
+        val distance = radius * (0.3f + particleProgress * 0.7f)
+        val x = center.x + cos(angle).toFloat() * distance
+        val y = center.y + sin(angle).toFloat() * distance
+        val alpha = (1f - particleProgress).coerceIn(0f, 0.8f)
+        val particleSize = (3f - particleProgress * 2f).coerceIn(1f, 3f)
+        val color = if (i % 2 == 0) primaryColor else secondaryColor
+        
+        drawCircle(color.copy(alpha = alpha), particleSize.dp.toPx(), Offset(x, y))
+    }
+}
+
+/**
+ * 成功爆炸动画
+ */
 @Composable
 private fun SuccessExplosionAnimation(modifier: Modifier = Modifier) {
     var visible by remember { mutableStateOf(true) }
@@ -296,16 +442,17 @@ private fun SuccessExplosionAnimation(modifier: Modifier = Modifier) {
     
     val successColor = Color(0xFF4CAF50)
     val particles = remember {
-        List(20) { i -> Particle(i, i * 18f + Random.nextFloat() * 10f, 0.6f + Random.nextFloat() * 0.4f,
-            4f + Random.nextFloat() * 4f, 0.8f + Random.nextFloat() * 0.4f, successColor) }
+        List(24) { i -> Particle(i, i * 15f + Random.nextFloat() * 10f, 0.5f + Random.nextFloat() * 0.5f,
+            3f + Random.nextFloat() * 5f, 0.7f + Random.nextFloat() * 0.5f, successColor) }
     }
     
     if (scaleProgress > 0.01f) {
         Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Canvas(modifier = Modifier.size(200.dp)) {
+            Canvas(modifier = Modifier.size(220.dp)) {
                 val center = Offset(size.width / 2, size.height / 2)
                 val maxRadius = size.minDimension / 2
                 
+                // 粒子爆炸
                 particles.forEach { particle ->
                     val currentDistance = maxRadius * particle.distance * explosionProgress * particle.speed
                     val angleRad = Math.toRadians(particle.angle.toDouble())
@@ -313,39 +460,45 @@ private fun SuccessExplosionAnimation(modifier: Modifier = Modifier) {
                     val y = center.y + sin(angleRad).toFloat() * currentDistance
                     val alpha = (1f - explosionProgress * 0.7f).coerceIn(0f, 1f)
                     
-                    drawCircle(particle.color.copy(alpha = alpha * 0.5f), particle.size * 2 * scaleProgress, Offset(x, y))
+                    drawCircle(particle.color.copy(alpha = alpha * 0.4f), particle.size * 2.5f * scaleProgress, Offset(x, y))
                     drawCircle(particle.color.copy(alpha = alpha), particle.size * scaleProgress, Offset(x, y))
                 }
                 
+                // 中心光晕
                 drawCircle(
-                    Brush.radialGradient(listOf(successColor.copy(alpha = 0.3f * scaleProgress),
-                        successColor.copy(alpha = 0.1f * scaleProgress), Color.Transparent), center, maxRadius * 0.6f * scaleProgress),
+                    Brush.radialGradient(listOf(successColor.copy(alpha = 0.4f * scaleProgress),
+                        successColor.copy(alpha = 0.15f * scaleProgress), Color.Transparent), center, maxRadius * 0.6f * scaleProgress),
                     maxRadius * 0.6f * scaleProgress, center
                 )
+                
+                // 成功圆环
                 drawCircle(successColor.copy(alpha = scaleProgress), maxRadius * 0.35f * scaleProgress, center, style = Stroke(4.dp.toPx()))
             }
             
-            Icon(Icons.Default.Check, "成功", Modifier.size((56 * scaleProgress).dp), successColor.copy(alpha = scaleProgress))
+            Icon(Icons.Default.Check, "成功", Modifier.size((60 * scaleProgress).dp), successColor.copy(alpha = scaleProgress))
         }
     }
 }
 
+/**
+ * 错误波纹动画
+ */
 @Composable
 private fun ErrorRippleAnimation(modifier: Modifier = Modifier) {
     var visible by remember { mutableStateOf(true) }
     val infiniteTransition = rememberInfiniteTransition(label = "errorRipple")
     
-    val ripples = listOf(0, 333, 666).map { delay ->
+    val ripples = listOf(0, 250, 500).map { delay ->
         infiniteTransition.animateFloat(
             initialValue = 0f, targetValue = 1f,
-            animationSpec = infiniteRepeatable(tween(1000, easing = LinearEasing, delayMillis = delay), RepeatMode.Restart),
+            animationSpec = infiniteRepeatable(tween(900, easing = LinearEasing, delayMillis = delay), RepeatMode.Restart),
             label = "ripple$delay"
         )
     }
     
     val shake by infiniteTransition.animateFloat(
-        initialValue = -3f, targetValue = 3f,
-        animationSpec = infiniteRepeatable(tween(50), RepeatMode.Reverse), label = "shake"
+        initialValue = -4f, targetValue = 4f,
+        animationSpec = infiniteRepeatable(tween(60), RepeatMode.Reverse), label = "shake"
     )
     
     val alpha by animateFloatAsState(
@@ -365,18 +518,18 @@ private fun ErrorRippleAnimation(modifier: Modifier = Modifier) {
                 ripples.forEach { ripple ->
                     val progress = ripple.value
                     val rippleAlpha = (1f - progress) * alpha
-                    drawCircle(errorColor.copy(alpha = rippleAlpha * 0.3f), maxRadius * progress, center)
-                    drawCircle(errorColor.copy(alpha = rippleAlpha), maxRadius * progress, center, style = Stroke(2.dp.toPx()))
+                    drawCircle(errorColor.copy(alpha = rippleAlpha * 0.25f), maxRadius * progress, center)
+                    drawCircle(errorColor.copy(alpha = rippleAlpha), maxRadius * progress, center, style = Stroke(2.5.dp.toPx()))
                 }
                 
                 drawCircle(
-                    Brush.radialGradient(listOf(errorColor.copy(alpha = 0.4f * alpha), errorColor.copy(alpha = 0.1f * alpha), Color.Transparent), center, maxRadius * 0.4f),
+                    Brush.radialGradient(listOf(errorColor.copy(alpha = 0.5f * alpha), errorColor.copy(alpha = 0.15f * alpha), Color.Transparent), center, maxRadius * 0.4f),
                     maxRadius * 0.4f, center
                 )
                 drawCircle(errorColor.copy(alpha = alpha), maxRadius * 0.3f, center, style = Stroke(3.dp.toPx()))
             }
             
-            Icon(Icons.Default.Close, "失败", Modifier.size(48.dp), errorColor.copy(alpha = alpha))
+            Icon(Icons.Default.Close, "失败", Modifier.size(52.dp), errorColor.copy(alpha = alpha))
         }
     }
 }

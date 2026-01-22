@@ -20,7 +20,9 @@ import com.ruolijianzhen.app.util.ImageStorage
 import com.ruolijianzhen.app.util.NetworkUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,6 +34,11 @@ import javax.inject.Inject
  * 主界面ViewModel
  * 集成错误处理、历史记录保存（含缩略图）、进度反馈和网络状态
  * 支持相机拍摄和本地图片识别
+ * 
+ * 优化：
+ * - 更健壮的错误处理，防止闪退
+ * - 安全的Bitmap操作
+ * - 协程取消处理
  */
 @HiltViewModel
 class MainViewModel @Inject constructor(
@@ -72,39 +79,54 @@ class MainViewModel @Inject constructor(
     // 保存最后选择的URI用于重试
     private var lastSelectedUri: Uri? = null
     
+    // 当前识别任务
+    private var currentRecognitionJob: Job? = null
+    
     init {
         // 监听识别状态
         viewModelScope.launch {
-            recognitionEngine.getRecognitionState().collect { state ->
-                _recognitionState.value = state
-                
-                when (state) {
-                    is RecognitionState.Success -> {
-                        _uiState.value = MainUiState.ShowResult(state.info)
-                        // 保存到历史记录（含缩略图）
-                        saveToHistoryWithThumbnail(state.info)
-                    }
-                    is RecognitionState.Error -> {
-                        _uiState.value = MainUiState.Error(state.message)
-                    }
-                    is RecognitionState.Processing -> {
-                        _uiState.value = MainUiState.Processing
-                    }
-                    is RecognitionState.Idle -> {
-                        if (_uiState.value !is MainUiState.ShowResult) {
-                            _uiState.value = MainUiState.Idle
+            try {
+                recognitionEngine.getRecognitionState().collect { state ->
+                    _recognitionState.value = state
+                    
+                    when (state) {
+                        is RecognitionState.Success -> {
+                            _uiState.value = MainUiState.ShowResult(state.info)
+                            // 保存到历史记录（含缩略图）
+                            saveToHistoryWithThumbnail(state.info)
+                        }
+                        is RecognitionState.Error -> {
+                            _uiState.value = MainUiState.Error(state.message)
+                        }
+                        is RecognitionState.Processing -> {
+                            _uiState.value = MainUiState.Processing
+                        }
+                        is RecognitionState.Idle -> {
+                            if (_uiState.value !is MainUiState.ShowResult) {
+                                _uiState.value = MainUiState.Idle
+                            }
                         }
                     }
                 }
+            } catch (e: CancellationException) {
+                // 正常取消，忽略
+            } catch (e: Exception) {
+                Log.e(TAG, "Error collecting recognition state", e)
             }
         }
         
         // 监听识别进度（如果引擎支持）
         viewModelScope.launch {
-            if (recognitionEngine is RecognitionEngineImpl) {
-                recognitionEngine.recognitionProgress.collect { progress ->
-                    _recognitionProgress.value = progress
+            try {
+                if (recognitionEngine is RecognitionEngineImpl) {
+                    recognitionEngine.recognitionProgress.collect { progress ->
+                        _recognitionProgress.value = progress
+                    }
                 }
+            } catch (e: CancellationException) {
+                // 正常取消，忽略
+            } catch (e: Exception) {
+                Log.e(TAG, "Error collecting recognition progress", e)
             }
         }
     }
@@ -119,49 +141,74 @@ class MainViewModel @Inject constructor(
             return
         }
         
+        // 取消之前的任务
+        currentRecognitionJob?.cancel()
+        
         // 清除上次选择的URI
         lastSelectedUri = null
         
-        viewModelScope.launch(errorHandler.createCoroutineExceptionHandler(ErrorContext.RECOGNITION)) {
+        currentRecognitionJob = viewModelScope.launch {
             try {
                 Log.d(TAG, "Starting capture and recognize")
                 
-                // 先捕获图片
-                val bitmap = cameraManager.captureImage()
+                // 先设置处理状态
+                _uiState.value = MainUiState.Processing
+                
+                // 捕获图片（带错误处理）
+                val bitmap = try {
+                    withContext(Dispatchers.IO) {
+                        cameraManager.captureImage()
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.e(TAG, "Camera capture failed", e)
+                    null
+                }
+                
                 if (bitmap == null) {
                     Log.e(TAG, "Failed to capture image - bitmap is null")
-                    val errorMsg = errorHandler.handleException(
-                        IllegalStateException("Failed to capture image"),
-                        ErrorContext.CAMERA
-                    )
-                    _uiState.value = MainUiState.Error(errorMsg)
+                    _uiState.value = MainUiState.Error("拍照失败，请重试")
                     return@launch
                 }
                 
-                // 保存用于重试和缩略图
+                // 安全地保存用于重试和缩略图
+                try {
+                    lastCapturedBitmap?.recycle()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to recycle old bitmap", e)
+                }
                 lastCapturedBitmap = bitmap
                 
                 // 设置冻结帧 - 在识别过程中显示捕获的画面
                 _frozenBitmap.value = bitmap
                 
-                // 然后设置处理状态（这样冻结帧会先显示）
-                _uiState.value = MainUiState.Processing
-                
                 Log.d(TAG, "Frozen bitmap set, size: ${bitmap.width}x${bitmap.height}")
                 
-                // 识别物品
-                val result = recognitionEngine.recognize(bitmap)
-                result.onSuccess { objectInfo ->
-                    Log.d(TAG, "Recognition success: ${objectInfo.name}")
-                    _uiState.value = MainUiState.ShowResult(objectInfo)
-                    saveToHistoryWithThumbnail(objectInfo)
-                }.onFailure { error ->
-                    Log.e(TAG, "Recognition failed", error)
-                    val errorMsg = errorHandler.handleException(error, ErrorContext.RECOGNITION)
+                // 识别物品（带错误处理）
+                try {
+                    val result = recognitionEngine.recognize(bitmap)
+                    result.onSuccess { objectInfo ->
+                        Log.d(TAG, "Recognition success: ${objectInfo.name}")
+                        _uiState.value = MainUiState.ShowResult(objectInfo)
+                        saveToHistoryWithThumbnail(objectInfo)
+                    }.onFailure { error ->
+                        Log.e(TAG, "Recognition failed", error)
+                        val errorMsg = errorHandler.handleException(error, ErrorContext.RECOGNITION)
+                        _uiState.value = MainUiState.Error(errorMsg)
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.e(TAG, "Recognition exception", e)
+                    val errorMsg = errorHandler.handleException(e, ErrorContext.RECOGNITION)
                     _uiState.value = MainUiState.Error(errorMsg)
-                    // 错误时保持冻结帧，让用户看到识别失败的是哪张图片
                 }
                 
+            } catch (e: CancellationException) {
+                Log.d(TAG, "Capture and recognize cancelled")
+                _uiState.value = MainUiState.Idle
+                _frozenBitmap.value = null
             } catch (e: Exception) {
                 Log.e(TAG, "Capture and recognize failed", e)
                 val errorMsg = errorHandler.handleException(e, ErrorContext.RECOGNITION)
@@ -180,32 +227,43 @@ class MainViewModel @Inject constructor(
             return
         }
         
+        // 取消之前的任务
+        currentRecognitionJob?.cancel()
+        
         // 保存URI用于重试
         lastSelectedUri = uri
         
-        viewModelScope.launch(errorHandler.createCoroutineExceptionHandler(ErrorContext.RECOGNITION)) {
+        currentRecognitionJob = viewModelScope.launch {
             try {
                 Log.d(TAG, "Starting recognize from URI: $uri")
                 
                 // 设置处理状态
                 _uiState.value = MainUiState.Processing
                 
-                // 在IO线程加载图片
-                val bitmap = withContext(Dispatchers.IO) {
-                    loadBitmapFromUri(uri)
+                // 在IO线程加载图片（带错误处理）
+                val bitmap = try {
+                    withContext(Dispatchers.IO) {
+                        loadBitmapFromUri(uri)
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to load image from URI", e)
+                    null
                 }
                 
                 if (bitmap == null) {
                     Log.e(TAG, "Failed to load image from URI")
-                    val errorMsg = errorHandler.handleException(
-                        IllegalStateException("无法加载图片"),
-                        ErrorContext.RECOGNITION
-                    )
-                    _uiState.value = MainUiState.Error(errorMsg)
+                    _uiState.value = MainUiState.Error("无法加载图片，请选择其他图片")
                     return@launch
                 }
                 
-                // 保存用于重试和缩略图
+                // 安全地保存用于重试和缩略图
+                try {
+                    lastCapturedBitmap?.recycle()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to recycle old bitmap", e)
+                }
                 lastCapturedBitmap = bitmap
                 
                 // 设置冻结帧 - 显示选择的图片
@@ -213,18 +271,30 @@ class MainViewModel @Inject constructor(
                 
                 Log.d(TAG, "Image loaded from URI, size: ${bitmap.width}x${bitmap.height}")
                 
-                // 识别物品
-                val result = recognitionEngine.recognize(bitmap)
-                result.onSuccess { objectInfo ->
-                    Log.d(TAG, "Recognition success: ${objectInfo.name}")
-                    _uiState.value = MainUiState.ShowResult(objectInfo)
-                    saveToHistoryWithThumbnail(objectInfo)
-                }.onFailure { error ->
-                    Log.e(TAG, "Recognition failed", error)
-                    val errorMsg = errorHandler.handleException(error, ErrorContext.RECOGNITION)
+                // 识别物品（带错误处理）
+                try {
+                    val result = recognitionEngine.recognize(bitmap)
+                    result.onSuccess { objectInfo ->
+                        Log.d(TAG, "Recognition success: ${objectInfo.name}")
+                        _uiState.value = MainUiState.ShowResult(objectInfo)
+                        saveToHistoryWithThumbnail(objectInfo)
+                    }.onFailure { error ->
+                        Log.e(TAG, "Recognition failed", error)
+                        val errorMsg = errorHandler.handleException(error, ErrorContext.RECOGNITION)
+                        _uiState.value = MainUiState.Error(errorMsg)
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.e(TAG, "Recognition exception", e)
+                    val errorMsg = errorHandler.handleException(e, ErrorContext.RECOGNITION)
                     _uiState.value = MainUiState.Error(errorMsg)
                 }
                 
+            } catch (e: CancellationException) {
+                Log.d(TAG, "Recognize from URI cancelled")
+                _uiState.value = MainUiState.Idle
+                _frozenBitmap.value = null
             } catch (e: Exception) {
                 Log.e(TAG, "Recognize from URI failed", e)
                 val errorMsg = errorHandler.handleException(e, ErrorContext.RECOGNITION)
@@ -291,7 +361,12 @@ class MainViewModel @Inject constructor(
             try {
                 // 保存缩略图
                 val thumbnailPath = lastCapturedBitmap?.let { bitmap ->
-                    imageStorage.saveThumbnail(bitmap, objectInfo.id)
+                    try {
+                        imageStorage.saveThumbnail(bitmap, objectInfo.id)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to save thumbnail", e)
+                        null
+                    }
                 }
                 
                 // 保存历史记录
@@ -308,13 +383,12 @@ class MainViewModel @Inject constructor(
      * 切换摄像头
      */
     fun switchCamera() {
-        viewModelScope.launch(errorHandler.createCoroutineExceptionHandler(ErrorContext.CAMERA)) {
+        viewModelScope.launch {
             try {
                 cameraManager.switchCamera()
             } catch (e: Exception) {
                 Log.e(TAG, "Switch camera failed", e)
-                val errorMsg = errorHandler.handleException(e, ErrorContext.CAMERA)
-                _uiState.value = MainUiState.Error(errorMsg)
+                // 切换摄像头失败不显示错误，静默处理
             }
         }
     }
@@ -341,7 +415,11 @@ class MainViewModel @Inject constructor(
         viewModelScope.launch {
             _frozenBitmap.value = null
             _recognitionProgress.value = null
-            recognitionEngine.resetState()
+            try {
+                recognitionEngine.resetState()
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to reset recognition state", e)
+            }
         }
     }
     
@@ -350,33 +428,48 @@ class MainViewModel @Inject constructor(
      * 使用上次捕获的图片或URI重新识别
      */
     fun retry() {
-        viewModelScope.launch {
-            // 如果有上次选择的URI，重新从URI加载
-            lastSelectedUri?.let { uri ->
-                recognizeFromUri(uri)
-                return@launch
-            }
+        // 如果有上次选择的URI，重新从URI加载
+        lastSelectedUri?.let { uri ->
+            recognizeFromUri(uri)
+            return
+        }
+        
+        // 如果有上次捕获的图片，直接重新识别
+        lastCapturedBitmap?.let { bitmap ->
+            // 取消之前的任务
+            currentRecognitionJob?.cancel()
             
-            // 如果有上次捕获的图片，直接重新识别
-            lastCapturedBitmap?.let { bitmap ->
-                // 确保冻结帧显示的是要重试的图片
-                _frozenBitmap.value = bitmap
-                _uiState.value = MainUiState.Processing
-                
-                val result = recognitionEngine.recognize(bitmap)
-                result.onSuccess { objectInfo ->
-                    _uiState.value = MainUiState.ShowResult(objectInfo)
-                    saveToHistoryWithThumbnail(objectInfo)
-                }.onFailure { error ->
-                    val errorMsg = errorHandler.handleException(error, ErrorContext.RECOGNITION)
+            currentRecognitionJob = viewModelScope.launch {
+                try {
+                    // 确保冻结帧显示的是要重试的图片
+                    _frozenBitmap.value = bitmap
+                    _uiState.value = MainUiState.Processing
+                    
+                    val result = recognitionEngine.recognize(bitmap)
+                    result.onSuccess { objectInfo ->
+                        _uiState.value = MainUiState.ShowResult(objectInfo)
+                        saveToHistoryWithThumbnail(objectInfo)
+                    }.onFailure { error ->
+                        val errorMsg = errorHandler.handleException(error, ErrorContext.RECOGNITION)
+                        _uiState.value = MainUiState.Error(errorMsg)
+                    }
+                } catch (e: CancellationException) {
+                    _uiState.value = MainUiState.Idle
+                    _frozenBitmap.value = null
+                } catch (e: Exception) {
+                    val errorMsg = errorHandler.handleException(e, ErrorContext.RECOGNITION)
                     _uiState.value = MainUiState.Error(errorMsg)
                 }
-            } ?: run {
-                // 没有缓存的图片，清除状态让用户重新拍摄
-                _uiState.value = MainUiState.Idle
-                _frozenBitmap.value = null
-                _recognitionProgress.value = null
+            }
+        } ?: run {
+            // 没有缓存的图片，清除状态让用户重新拍摄
+            _uiState.value = MainUiState.Idle
+            _frozenBitmap.value = null
+            _recognitionProgress.value = null
+            try {
                 recognitionEngine.resetState()
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to reset recognition state", e)
             }
         }
     }
@@ -398,12 +491,22 @@ class MainViewModel @Inject constructor(
     
     override fun onCleared() {
         super.onCleared()
-        // 异步释放资源
-        viewModelScope.launch {
+        // 取消所有任务
+        currentRecognitionJob?.cancel()
+        
+        // 安全释放资源
+        try {
             lastCapturedBitmap?.recycle()
             lastCapturedBitmap = null
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to recycle bitmap", e)
         }
-        cameraManager.release()
+        
+        try {
+            cameraManager.release()
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to release camera", e)
+        }
     }
 }
 
