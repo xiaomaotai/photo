@@ -1,5 +1,8 @@
 package com.ruolijianzhen.app.ui.home
 
+import android.app.Activity
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -12,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -20,6 +24,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -36,6 +41,21 @@ fun HomeScreen(
     onNavigateToSettings: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
+    val context = LocalContext.current
+    var lastBackPressTime by rememberSaveable { mutableLongStateOf(0L) }
+
+    // 双击返回退出应用
+    BackHandler {
+        val currentTime = System.currentTimeMillis()
+        if (currentTime - lastBackPressTime < 2000) {
+            // 2秒内连续按两次，退出应用
+            (context as? Activity)?.finish()
+        } else {
+            lastBackPressTime = currentTime
+            Toast.makeText(context, "再按一次退出应用", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     val todayCount by viewModel.todayCount.collectAsState()
     val totalCount by viewModel.totalCount.collectAsState()
     @Suppress("UNUSED_VARIABLE")
@@ -350,15 +370,17 @@ private fun SecondaryEntryCard(
  */
 @Composable
 private fun UsageTipsCard() {
+    data class Tip(val icon: ImageVector, val text: String)
+
     val tips = listOf(
-        "💡 双指缩放可以放大画面",
-        "📸 点击屏幕可以对焦",
-        "🔦 光线充足识别更准确",
-        "⭐ 喜欢的结果可以收藏"
+        Tip(Icons.Default.Lightbulb, "双指缩放可以放大画面"),
+        Tip(Icons.Default.PhotoCamera, "点击屏幕可以对焦"),
+        Tip(Icons.Default.FlashlightOn, "光线充足识别更准确"),
+        Tip(Icons.Default.Star, "喜欢的结果可以收藏")
     )
-    
+
     var currentTip by remember { mutableIntStateOf(0) }
-    
+
     // 自动切换提示
     LaunchedEffect(Unit) {
         while (true) {
@@ -366,7 +388,7 @@ private fun UsageTipsCard() {
             currentTip = (currentTip + 1) % tips.size
         }
     }
-    
+
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
@@ -374,10 +396,17 @@ private fun UsageTipsCard() {
     ) {
         Row(
             modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            Icon(
+                imageVector = tips[currentTip].icon,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
             Text(
-                text = tips[currentTip],
+                text = tips[currentTip].text,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )

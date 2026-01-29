@@ -8,7 +8,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.DragHandle
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -129,11 +129,22 @@ fun PrioritySettingsDialog(
                 // 错误提示
                 if (!hasEnabledMethod) {
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "⚠️ 至少需要启用一种识别方式",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                        Text(
+                            text = "至少需要启用一种识别方式",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
                 }
                 
                 Spacer(modifier = Modifier.height(24.dp))
@@ -207,9 +218,10 @@ private fun PriorityMethodItem(
                     enabled = canMoveUp,
                     modifier = Modifier.size(24.dp)
                 ) {
-                    Text(
-                        text = "▲",
-                        color = if (canMoveUp) {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowUp,
+                        contentDescription = "上移",
+                        tint = if (canMoveUp) {
                             MaterialTheme.colorScheme.primary
                         } else {
                             MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
@@ -221,9 +233,10 @@ private fun PriorityMethodItem(
                     enabled = canMoveDown,
                     modifier = Modifier.size(24.dp)
                 ) {
-                    Text(
-                        text = "▼",
-                        color = if (canMoveDown) {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowDown,
+                        contentDescription = "下移",
+                        tint = if (canMoveDown) {
                             MaterialTheme.colorScheme.primary
                         } else {
                             MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)

@@ -19,13 +19,32 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ruolijianzhen.app.domain.model.ObjectInfo
+import com.ruolijianzhen.app.domain.model.ObjectType
 import com.ruolijianzhen.app.domain.model.RecognitionQuality
+
+/**
+ * 获取ObjectType对应的Material Icon
+ */
+private fun ObjectType.getIcon(): ImageVector = when (this) {
+    ObjectType.GENERAL -> Icons.Default.Inventory2
+    ObjectType.ELECTRONICS -> Icons.Default.Smartphone
+    ObjectType.ANIMAL -> Icons.Default.Pets
+    ObjectType.PLANT -> Icons.Default.Eco
+    ObjectType.FOOD -> Icons.Default.Restaurant
+    ObjectType.DAILY_USE -> Icons.Default.Home
+    ObjectType.ARTWORK -> Icons.Default.Palette
+    ObjectType.LANDMARK -> Icons.Default.AccountBalance
+    ObjectType.VEHICLE -> Icons.Default.DirectionsCar
+    ObjectType.CLOTHING -> Icons.Default.Checkroom
+    ObjectType.BOOK -> Icons.Default.AutoStories
+}
 
 /**
  * 识别结果BottomSheet - 简洁设计
@@ -233,7 +252,12 @@ private fun HeaderSection(
                 Brush.verticalGradient(listOf(Color(0xFF6366F1), Color(0xFF8B5CF6), Color(0xFFA855F7)))
             )) {
                 Box(modifier = Modifier.align(Alignment.Center).size(120.dp).background(Color.White.copy(alpha = 0.1f), RoundedCornerShape(60.dp)))
-                Text(objectInfo.objectType.icon, fontSize = 64.sp, modifier = Modifier.align(Alignment.Center))
+                Icon(
+                    imageVector = objectInfo.objectType.getIcon(),
+                    contentDescription = null,
+                    modifier = Modifier.align(Alignment.Center).size(64.dp),
+                    tint = Color.White.copy(alpha = 0.9f)
+                )
             }
         }
         
@@ -259,7 +283,12 @@ private fun HeaderSection(
         
         Column(modifier = Modifier.align(Alignment.BottomStart).padding(20.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(objectInfo.objectType.icon, fontSize = 16.sp)
+                Icon(
+                    imageVector = objectInfo.objectType.getIcon(),
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = Color.White
+                )
                 Text(objectInfo.category.ifBlank { "未分类" }, style = MaterialTheme.typography.labelMedium, color = Color.White.copy(alpha = 0.8f))
             }
             Spacer(modifier = Modifier.height(4.dp))
@@ -400,7 +429,7 @@ private fun FunFactsSection(facts: List<String>) {
     Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f)), shape = RoundedCornerShape(16.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("💡", fontSize = 18.sp)
+                Icon(Icons.Default.Lightbulb, null, tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(20.dp))
                 Text("知识卡片", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             }
             Spacer(modifier = Modifier.height(12.dp))
@@ -414,7 +443,7 @@ private fun TipsSection(tips: List<String>) {
     Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f)), shape = RoundedCornerShape(16.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("📝", fontSize = 18.sp)
+                Icon(Icons.Default.Notes, null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(20.dp))
                 Text("小贴士", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             }
             Spacer(modifier = Modifier.height(12.dp))

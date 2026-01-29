@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir /s /b \"C:\\\\Users\\\\MC\\\\scriprt\\\\photo\\\\app\\\\src\\\\main\\\\kotlin\\\\*PrioritySettingsDialog*\")",
+      "Bash(dir /s /b \"C:\\\\Users\\\\MC\\\\scriprt\\\\photo\\\\app\\\\src\\\\main\\\\kotlin\\\\*.kt\")",
+      "Bash(findstr:*)",
+      "Bash(dir /b \"C:\\\\Users\\\\MC\\\\scriprt\\\\photo\\\\app\\\\src\\\\main\\\\kotlin\\\\com\\\\ruolijianzhen\\\\app\\\\ui\\\\settings\")",
+      "Bash(dir /s /b \"C:\\\\Users\\\\MC\\\\scriprt\\\\photo\\\\app\\\\src\\\\main\\\\kotlin\\\\com\\\\ruolijianzhen\\\\app\\\\ui\\\\settings\"\")",
+      "Bash(dir:*)",
+      "Bash(tree:*)",
+      "Bash(gradlew clean:*)",
+      "Bash(gradlew assembleDebug:*)",
+      "Bash(.gradlew assembleDebug)",
+      "Bash(cmd /c \"gradlew.bat assembleDebug 2>&1\")",
+      "Bash(java -version:*)",
+      "Bash(\"C:\\\\Program Files\\\\Android\\\\Android Studio\\\\jbr\\\\bin\\\\java.exe\" -version)",
+      "Bash(rd /s /q \"C:\\\\Users\\\\MC\\\\.gradle\\\\caches\\\\transforms-3\\\\36fbcc0adddc971849f176cbc48ff9c1\")",
+      "Bash(Select-Object -First 20)",
+      "Bash(Get-ChildItem \"C:/Program Files/Android/Android Studio/jbr/bin\" -ErrorAction SilentlyContinue)",
+      "Bash(Where-Object { $_Name -like \"*jlink*\" })",
+      "Bash(Get-ChildItem \"C:/Program Files/Android\" -ErrorAction SilentlyContinue)",
+      "Bash(where:*)",
+      "Bash($env:JAVA_HOME)",
+      "mcp__ace-tool__search_context",
+      "Bash(.gradlew compileReleaseKotlin:*)",
+      "Bash(Select-String -Pattern \"error:|Error:|e:|Unresolved|not found\" -Context 0,2)",
+      "Bash(Select-Object -Last 100)",
+      "Bash(cmd /c \"cd /d C:\\\\Users\\\\MC\\\\scriprt\\\\photo && gradlew.bat compileReleaseKotlin 2>&1\")",
+      "Bash(git -C \"C:/Users/MC/scriprt/photo\" status)",
+      "Bash(cmd /c \"git status --porcelain\")",
+      "Bash(git add:*)"
+    ]
+  }
+}

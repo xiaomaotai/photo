@@ -51,19 +51,20 @@ data class ObjectInfo(
 
 /**
  * 物品类型枚举 - 用于决定展示哪些字段
+ * icon字段存储Material Icon名称，使用getTypeIcon()扩展函数获取实际图标
  */
-enum class ObjectType(val displayName: String, val icon: String) {
-    GENERAL("通用", "📦"),
-    ELECTRONICS("电子产品", "📱"),
-    ANIMAL("动物", "🐾"),
-    PLANT("植物", "🌿"),
-    FOOD("食物", "🍽️"),
-    DAILY_USE("日用品", "🏠"),
-    ARTWORK("艺术品", "🎨"),
-    LANDMARK("地标建筑", "🏛️"),
-    VEHICLE("交通工具", "🚗"),
-    CLOTHING("服饰", "👔"),
-    BOOK("书籍", "📚");
+enum class ObjectType(val displayName: String, val iconName: String) {
+    GENERAL("通用", "Inventory2"),
+    ELECTRONICS("电子产品", "Smartphone"),
+    ANIMAL("动物", "Pets"),
+    PLANT("植物", "Eco"),
+    FOOD("食物", "Restaurant"),
+    DAILY_USE("日用品", "Home"),
+    ARTWORK("艺术品", "Palette"),
+    LANDMARK("地标建筑", "AccountBalance"),
+    VEHICLE("交通工具", "DirectionsCar"),
+    CLOTHING("服饰", "Checkroom"),
+    BOOK("书籍", "AutoStories");
     
     companion object {
         /**

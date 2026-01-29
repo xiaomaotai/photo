@@ -88,3 +88,4 @@ Thumbs.db
 
 # key file (sensitive)
 key
+.ace-tool/

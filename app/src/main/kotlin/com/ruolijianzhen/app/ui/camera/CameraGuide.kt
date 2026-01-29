@@ -3,6 +3,9 @@ package com.ruolijianzhen.app.ui.camera
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -20,6 +23,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -278,27 +282,42 @@ private fun GuideText(
     guideType: CameraGuideType,
     modifier: Modifier = Modifier
 ) {
-    val (text, color) = when (guideType) {
-        CameraGuideType.NORMAL -> "将物品放入取景框内" to Color.White
-        CameraGuideType.LOW_LIGHT -> "💡 光线不足，请移到明亮处" to Color(0xFFFFC107)
-        CameraGuideType.TOO_FAR -> "📏 距离太远，请靠近物品" to Color(0xFFFFC107)
-        CameraGuideType.TOO_CLOSE -> "📏 距离太近，请稍微后退" to Color(0xFFFFC107)
-        CameraGuideType.BLURRY -> "📷 画面模糊，请保持稳定" to Color(0xFFFFC107)
-        CameraGuideType.OFF_CENTER -> "🎯 请将物品移到画面中央" to Color(0xFFFFC107)
+    data class GuideInfo(val icon: ImageVector?, val text: String, val color: Color)
+
+    val guideInfo = when (guideType) {
+        CameraGuideType.NORMAL -> GuideInfo(null, "将物品放入取景框内", Color.White)
+        CameraGuideType.LOW_LIGHT -> GuideInfo(Icons.Default.Lightbulb, "光线不足，请移到明亮处", Color(0xFFFFC107))
+        CameraGuideType.TOO_FAR -> GuideInfo(Icons.Default.Straighten, "距离太远，请靠近物品", Color(0xFFFFC107))
+        CameraGuideType.TOO_CLOSE -> GuideInfo(Icons.Default.Straighten, "距离太近，请稍微后退", Color(0xFFFFC107))
+        CameraGuideType.BLURRY -> GuideInfo(Icons.Default.CameraAlt, "画面模糊，请保持稳定", Color(0xFFFFC107))
+        CameraGuideType.OFF_CENTER -> GuideInfo(Icons.Default.GpsFixed, "请将物品移到画面中央", Color(0xFFFFC107))
     }
-    
+
     Surface(
         modifier = modifier,
         color = Color.Black.copy(alpha = 0.5f),
         shape = MaterialTheme.shapes.medium
     ) {
-        Text(
-            text = text,
-            color = color,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-        )
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            guideInfo.icon?.let { icon ->
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = guideInfo.color
+                )
+            }
+            Text(
+                text = guideInfo.text,
+                color = guideInfo.color,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium
+            )
+        }
     }
 }
 

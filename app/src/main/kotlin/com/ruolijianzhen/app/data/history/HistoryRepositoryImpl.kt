@@ -36,7 +36,31 @@ class HistoryRepositoryImpl @Inject constructor(
             confidence = objectInfo.confidence,
             source = objectInfo.source.name,
             thumbnailPath = thumbnailPath,
-            timestamp = System.currentTimeMillis()
+            timestamp = System.currentTimeMillis(),
+
+            // 详细信息字段
+            brand = objectInfo.brand,
+            model = objectInfo.model,
+            species = objectInfo.species,
+            priceRange = objectInfo.priceRange,
+            material = objectInfo.material,
+            color = objectInfo.color,
+            size = objectInfo.size,
+            manufacturer = objectInfo.manufacturer,
+            features = if (objectInfo.features.isNotEmpty()) JSONArray(objectInfo.features).toString() else null,
+
+            // 百科知识字段
+            summary = objectInfo.summary,
+            description = objectInfo.description,
+            historyText = objectInfo.history,
+            funFacts = if (objectInfo.funFacts.isNotEmpty()) JSONArray(objectInfo.funFacts).toString() else null,
+            tips = if (objectInfo.tips.isNotEmpty()) JSONArray(objectInfo.tips).toString() else null,
+            relatedTopics = if (objectInfo.relatedTopics.isNotEmpty()) JSONArray(objectInfo.relatedTopics).toString() else null,
+
+            // 分类特定字段
+            objectType = objectInfo.objectType.name,
+            typeSpecificInfo = if (objectInfo.typeSpecificInfo.isNotEmpty()) org.json.JSONObject(objectInfo.typeSpecificInfo).toString() else null,
+            additionalInfo = if (objectInfo.additionalInfo.isNotEmpty()) org.json.JSONObject(objectInfo.additionalInfo).toString() else null
         )
         historyDao.insertHistory(entity)
     }
@@ -159,13 +183,14 @@ class HistoryRepositoryImpl @Inject constructor(
      * 将Entity转换为HistoryItem
      */
     private fun HistoryEntity.toHistoryItem(): HistoryItem {
-        val aliasesList = try {
-            val jsonArray = JSONArray(aliases)
-            (0 until jsonArray.length()).map { jsonArray.getString(it) }
-        } catch (e: Exception) {
-            emptyList()
-        }
-        
+        val aliasesList = parseJsonArray(aliases)
+        val featuresList = parseJsonArray(features)
+        val funFactsList = parseJsonArray(funFacts)
+        val tipsList = parseJsonArray(tips)
+        val relatedTopicsList = parseJsonArray(relatedTopics)
+        val typeSpecificMap = parseJsonMap(typeSpecificInfo)
+        val additionalMap = parseJsonMap(additionalInfo)
+
         return HistoryItem(
             id = id,
             name = name,
@@ -177,7 +202,53 @@ class HistoryRepositoryImpl @Inject constructor(
             source = source,
             thumbnailPath = thumbnailPath,
             timestamp = timestamp,
-            isFavorite = isFavorite
+            isFavorite = isFavorite,
+            brand = brand,
+            model = model,
+            species = species,
+            priceRange = priceRange,
+            material = material,
+            color = color,
+            size = size,
+            manufacturer = manufacturer,
+            features = featuresList,
+            summary = summary,
+            description = description,
+            historyText = historyText,
+            funFacts = funFactsList,
+            tips = tipsList,
+            relatedTopics = relatedTopicsList,
+            objectType = try {
+                com.ruolijianzhen.app.domain.model.ObjectType.valueOf(objectType)
+            } catch (e: Exception) {
+                com.ruolijianzhen.app.domain.model.ObjectType.GENERAL
+            },
+            typeSpecificInfo = typeSpecificMap,
+            additionalInfo = additionalMap
         )
+    }
+
+    private fun parseJsonArray(jsonString: String?): List<String> {
+        if (jsonString.isNullOrBlank()) return emptyList()
+        return try {
+            val jsonArray = JSONArray(jsonString)
+            (0 until jsonArray.length()).map { jsonArray.getString(it) }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun parseJsonMap(jsonString: String?): Map<String, String> {
+        if (jsonString.isNullOrBlank()) return emptyMap()
+        return try {
+            val jsonObject = org.json.JSONObject(jsonString)
+            val map = mutableMapOf<String, String>()
+            jsonObject.keys().forEach { key ->
+                map[key] = jsonObject.getString(key)
+            }
+            map
+        } catch (e: Exception) {
+            emptyMap()
+        }
     }
 }

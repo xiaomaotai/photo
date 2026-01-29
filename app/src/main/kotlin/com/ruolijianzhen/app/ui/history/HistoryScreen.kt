@@ -12,7 +12,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -235,12 +237,18 @@ fun HistoryItemCard(item: HistoryItem, isSelectionMode: Boolean, isSelected: Boo
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(item.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                    if (item.isFavorite) { Spacer(modifier = Modifier.width(6.dp)); Text("❤️", fontSize = 12.sp) }
+                    if (item.isFavorite) { Spacer(modifier = Modifier.width(6.dp)); Icon(Icons.Default.Favorite, null, tint = Color(0xFFE91E63), modifier = Modifier.size(14.dp)) }
                 }
                 Spacer(modifier = Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Surface(shape = RoundedCornerShape(6.dp), color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)) {
-                        Text(item.category, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
+                        Text(
+                            text = if (item.category.length > 6) item.category.take(6) + "…" else item.category,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            maxLines = 1
+                        )
                     }
                     Text(timeFormat.format(Date(item.timestamp)), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     CompactQualityIndicator(confidence = item.confidence)
@@ -280,7 +288,12 @@ private fun PlaceholderThumbnail(modifier: Modifier = Modifier) {
 @Composable
 fun EmptyHistoryView(modifier: Modifier = Modifier, isFiltered: Boolean = false) {
     Column(modifier = modifier.padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text(if (isFiltered) "🔍" else "📭", fontSize = 56.sp)
+        Icon(
+            imageVector = if (isFiltered) Icons.Default.Search else Icons.Default.Inbox,
+            contentDescription = null,
+            modifier = Modifier.size(56.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+        )
         Text(if (isFiltered) "没有找到匹配的记录" else "暂无历史记录", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(if (isFiltered) "试试其他搜索词或筛选条件" else "识别物品后会自动保存到这里", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
     }
@@ -289,7 +302,12 @@ fun EmptyHistoryView(modifier: Modifier = Modifier, isFiltered: Boolean = false)
 @Composable
 fun ErrorView(message: String, onRetry: () -> Unit, modifier: Modifier = Modifier) {
     Column(modifier = modifier.padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text("😕", fontSize = 56.sp)
+        Icon(
+            imageVector = Icons.Default.SentimentDissatisfied,
+            contentDescription = null,
+            modifier = Modifier.size(56.dp),
+            tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
+        )
         Text(message, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.error)
         FilledTonalButton(onClick = onRetry) { Text("重试") }
     }
@@ -299,35 +317,87 @@ fun ErrorView(message: String, onRetry: () -> Unit, modifier: Modifier = Modifie
 @Composable
 fun HistoryDetailSheet(item: HistoryItem, onDismiss: () -> Unit, onDelete: () -> Unit, onFavorite: () -> Unit) {
     val sheetState = rememberModalBottomSheetState()
-    
+
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = MaterialTheme.colorScheme.surface) {
-        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 32.dp)) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp)
+        ) {
             if (item.thumbnailPath != null) {
                 ThumbnailImage(thumbnailPath = item.thumbnailPath, modifier = Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(16.dp)))
                 Spacer(modifier = Modifier.height(16.dp))
             }
-            
+
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text(item.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 IconButton(onClick = onFavorite) {
                     Icon(if (item.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder, null, tint = if (item.isFavorite) Color(0xFFE91E63) else MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            
+
             Spacer(modifier = Modifier.height(20.dp))
-            
+
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                // 基本信息
                 if (item.aliases.isNotEmpty()) DetailCard("别名", item.aliases.joinToString("、"))
-                DetailCard("来历", item.origin)
-                DetailCard("用途", item.usage)
+
+                // 简介/摘要
+                if (item.summary.hasContent()) DetailCard("简介", item.summary!!)
+
+                // 来历和用途
+                if (item.origin.hasContent()) DetailCard("来历", item.origin)
+                if (item.usage.hasContent()) DetailCard("用途", item.usage)
+
+                // 详细信息
+                if (item.description.hasContent()) DetailCard("详细描述", item.description!!)
+                if (item.historyText.hasContent()) DetailCard("历史背景", item.historyText!!)
+
+                // 产品详情（如有）
+                val productDetails = buildList {
+                    if (item.brand.hasContent()) add("品牌: ${item.brand}")
+                    if (item.model.hasContent()) add("型号: ${item.model}")
+                    if (item.manufacturer.hasContent()) add("产地: ${item.manufacturer}")
+                    if (item.material.hasContent()) add("材质: ${item.material}")
+                    if (item.color.hasContent()) add("颜色: ${item.color}")
+                    if (item.size.hasContent()) add("规格: ${item.size}")
+                    if (item.priceRange.hasContent()) add("价格区间: ${item.priceRange}")
+                }
+                if (productDetails.isNotEmpty()) {
+                    DetailCard("产品详情", productDetails.joinToString("\n"))
+                }
+
+                // 特征列表
+                if (item.features.isNotEmpty()) {
+                    DetailCard("特征", item.features.joinToString("、"))
+                }
+
+                // 知识卡片
+                if (item.funFacts.isNotEmpty()) {
+                    FunFactsCard(item.funFacts)
+                }
+
+                // 小贴士
+                if (item.tips.isNotEmpty()) {
+                    TipsCard(item.tips)
+                }
+
+                // 延伸阅读
+                if (item.relatedTopics.isNotEmpty()) {
+                    DetailCard("延伸阅读", item.relatedTopics.joinToString("、"))
+                }
+
+                // 分类和置信度
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     DetailCard("分类", item.category, Modifier.weight(1f))
                     DetailCard("置信度", "${(item.confidence * 100).toInt()}%", Modifier.weight(1f))
                 }
             }
-            
+
             Spacer(modifier = Modifier.height(24.dp))
-            
+
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedButton(onClick = onDelete, modifier = Modifier.weight(1f), colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("删除") }
                 Button(onClick = onDismiss, modifier = Modifier.weight(1f)) { Text("关闭") }
@@ -335,6 +405,51 @@ fun HistoryDetailSheet(item: HistoryItem, onDismiss: () -> Unit, onDelete: () ->
         }
     }
 }
+
+@Composable
+private fun FunFactsCard(facts: List<String>) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f)),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Icon(Icons.Default.Lightbulb, null, tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(18.dp))
+                Text("知识卡片", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            facts.forEach { fact ->
+                Text(fact, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(vertical = 2.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun TipsCard(tips: List<String>) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f)),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Icon(Icons.Default.Notes, null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(18.dp))
+                Text("小贴士", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            tips.forEachIndexed { index, tip ->
+                Row(modifier = Modifier.padding(vertical = 2.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("${index + 1}.", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.secondary)
+                    Text(tip, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+private fun String?.hasContent(): Boolean = !this.isNullOrBlank() && this.lowercase() != "null" && this != "暂无信息"
 
 @Composable
 fun DetailCard(label: String, value: String, modifier: Modifier = Modifier) {

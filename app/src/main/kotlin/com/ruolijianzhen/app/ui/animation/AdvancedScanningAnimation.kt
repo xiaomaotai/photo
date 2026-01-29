@@ -17,30 +17,39 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.ruolijianzhen.app.util.DevicePerformanceUtils
 import kotlin.math.*
 import kotlin.random.Random
 
 /**
  * 高级扫描动画组件
  * 提供粒子效果、光波扩散、AI风格动画等炫酷效果
- * 
+ *
  * 优化：
  * - 更流畅的动画过渡
  * - 更炫酷的视觉效果
- * - 性能优化
+ * - 性能优化（低端机简化效果）
  */
 @Composable
 fun AdvancedScanningAnimation(
     state: ScanningAnimationState,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    reduceAnimations: Boolean = false
 ) {
+    // 如果没有传入，自动检测设备性能
+    val context = LocalContext.current
+    val shouldReduce = remember(reduceAnimations) {
+        reduceAnimations || DevicePerformanceUtils.shouldReduceAnimations(context)
+    }
+
     when (state) {
         ScanningAnimationState.Idle -> { /* 空闲不显示 */ }
-        ScanningAnimationState.Scanning -> ParticleGatherAnimation(modifier = modifier)
-        ScanningAnimationState.Processing -> AIProcessingAnimation(modifier = modifier)
-        ScanningAnimationState.Success -> SuccessExplosionAnimation(modifier = modifier)
-        ScanningAnimationState.Error -> ErrorRippleAnimation(modifier = modifier)
+        ScanningAnimationState.Scanning -> ParticleGatherAnimation(modifier = modifier, reduceAnimations = shouldReduce)
+        ScanningAnimationState.Processing -> AIProcessingAnimation(modifier = modifier, reduceAnimations = shouldReduce)
+        ScanningAnimationState.Success -> SuccessExplosionAnimation(modifier = modifier, reduceAnimations = shouldReduce)
+        ScanningAnimationState.Error -> ErrorRippleAnimation(modifier = modifier, reduceAnimations = shouldReduce)
     }
 }
 
@@ -55,11 +64,15 @@ private data class Particle(
 
 /**
  * 粒子聚集动画 - 扫描状态
+ * @param reduceAnimations 低端机模式：减少粒子数量
  */
 @Composable
-private fun ParticleGatherAnimation(modifier: Modifier = Modifier) {
+private fun ParticleGatherAnimation(
+    modifier: Modifier = Modifier,
+    reduceAnimations: Boolean = false
+) {
     val infiniteTransition = rememberInfiniteTransition(label = "gather")
-    
+
     val gatherProgress by infiniteTransition.animateFloat(
         initialValue = 1f, targetValue = 0f,
         animationSpec = infiniteRepeatable(
@@ -67,7 +80,7 @@ private fun ParticleGatherAnimation(modifier: Modifier = Modifier) {
             repeatMode = RepeatMode.Restart
         ), label = "gatherProgress"
     )
-    
+
     val rotation by infiniteTransition.animateFloat(
         initialValue = 0f, targetValue = 360f,
         animationSpec = infiniteRepeatable(
@@ -75,7 +88,7 @@ private fun ParticleGatherAnimation(modifier: Modifier = Modifier) {
             repeatMode = RepeatMode.Restart
         ), label = "rotation"
     )
-    
+
     val pulse by infiniteTransition.animateFloat(
         initialValue = 0.8f, targetValue = 1.2f,
         animationSpec = infiniteRepeatable(
@@ -83,14 +96,18 @@ private fun ParticleGatherAnimation(modifier: Modifier = Modifier) {
             repeatMode = RepeatMode.Reverse
         ), label = "pulse"
     )
-    
+
     val primaryColor = MaterialTheme.colorScheme.primary
     val secondaryColor = MaterialTheme.colorScheme.secondary
     val tertiaryColor = MaterialTheme.colorScheme.tertiary
-    
-    val particles = remember {
-        List(40) { i ->
-            Particle(i, (i * 9f) + Random.nextFloat() * 10f, 0.5f + Random.nextFloat() * 0.5f,
+
+    // 低端机减少粒子数量：40→12
+    val particleCount = if (reduceAnimations) 12 else 40
+
+    val particles = remember(particleCount) {
+        List(particleCount) { i ->
+            val angleStep = 360f / particleCount
+            Particle(i, (i * angleStep) + Random.nextFloat() * 10f, 0.5f + Random.nextFloat() * 0.5f,
                 3f + Random.nextFloat() * 5f, 0.8f + Random.nextFloat() * 0.4f,
                 when (i % 3) { 0 -> primaryColor; 1 -> secondaryColor; else -> tertiaryColor })
         }
@@ -136,9 +153,13 @@ private fun ParticleGatherAnimation(modifier: Modifier = Modifier) {
 /**
  * AI处理动画 - 识别中状态
  * 炫酷的科技感动画效果
+ * @param reduceAnimations 低端机模式：简化部分效果
  */
 @Composable
-private fun AIProcessingAnimation(modifier: Modifier = Modifier) {
+private fun AIProcessingAnimation(
+    modifier: Modifier = Modifier,
+    reduceAnimations: Boolean = false
+) {
     val infiniteTransition = rememberInfiniteTransition(label = "ai")
     
     // 扫描线位置
@@ -191,30 +212,34 @@ private fun AIProcessingAnimation(modifier: Modifier = Modifier) {
         Canvas(modifier = Modifier.size(320.dp)) {
             val center = Offset(size.width / 2, size.height / 2)
             val frameSize = size.minDimension * 0.75f
-            
+
+            // 基础效果（所有设备）
             // 绘制扩散光环
             drawExpandingHalo(center, frameSize, haloExpand, primaryColor)
-            
+
             // 绘制科技感边框
             drawTechFrame(center, frameSize, outerRotation, primaryColor, secondaryColor)
-            
-            // 绘制内圈
-            drawInnerRings(center, frameSize * 0.6f, innerRotation, primaryColor, tertiaryColor)
-            
+
             // 绘制扫描线
             drawScanLine(center, frameSize, scanProgress, primaryColor)
-            
-            // 绘制数据流点
-            drawDataFlowPoints(center, frameSize * 0.4f, dataFlow, primaryColor, secondaryColor)
-            
+
             // 绘制AI核心
             drawAICore(center, frameSize * 0.15f * pulse, primaryColor, tertiaryColor)
-            
-            // 绘制神经网络连接
-            drawNeuralConnections(center, frameSize * 0.35f, dataFlow, primaryColor)
-            
-            // 绘制能量粒子
-            drawEnergyParticles(center, frameSize * 0.5f, dataFlow, primaryColor, secondaryColor)
+
+            // 高端机额外效果
+            if (!reduceAnimations) {
+                // 绘制内圈
+                drawInnerRings(center, frameSize * 0.6f, innerRotation, primaryColor, tertiaryColor)
+
+                // 绘制数据流点
+                drawDataFlowPoints(center, frameSize * 0.4f, dataFlow, primaryColor, secondaryColor)
+
+                // 绘制神经网络连接
+                drawNeuralConnections(center, frameSize * 0.35f, dataFlow, primaryColor)
+
+                // 绘制能量粒子
+                drawEnergyParticles(center, frameSize * 0.5f, dataFlow, primaryColor, secondaryColor)
+            }
         }
     }
 }
@@ -424,11 +449,15 @@ private fun DrawScope.drawEnergyParticles(center: Offset, radius: Float, progres
 
 /**
  * 成功爆炸动画
+ * @param reduceAnimations 低端机模式：减少粒子数量
  */
 @Composable
-private fun SuccessExplosionAnimation(modifier: Modifier = Modifier) {
+private fun SuccessExplosionAnimation(
+    modifier: Modifier = Modifier,
+    reduceAnimations: Boolean = false
+) {
     var visible by remember { mutableStateOf(true) }
-    
+
     val explosionProgress by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
         animationSpec = tween(800, easing = FastOutSlowInEasing), label = "explosion"
@@ -437,12 +466,17 @@ private fun SuccessExplosionAnimation(modifier: Modifier = Modifier) {
         targetValue = if (visible) 1f else 0f,
         animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow), label = "scale"
     )
-    
+
     LaunchedEffect(Unit) { kotlinx.coroutines.delay(2000); visible = false }
-    
+
     val successColor = Color(0xFF4CAF50)
-    val particles = remember {
-        List(24) { i -> Particle(i, i * 15f + Random.nextFloat() * 10f, 0.5f + Random.nextFloat() * 0.5f,
+
+    // 低端机减少粒子数量：24→8
+    val particleCount = if (reduceAnimations) 8 else 24
+
+    val particles = remember(particleCount) {
+        val angleStep = 360f / particleCount
+        List(particleCount) { i -> Particle(i, i * angleStep + Random.nextFloat() * 10f, 0.5f + Random.nextFloat() * 0.5f,
             3f + Random.nextFloat() * 5f, 0.7f + Random.nextFloat() * 0.5f, successColor) }
     }
     
@@ -482,13 +516,20 @@ private fun SuccessExplosionAnimation(modifier: Modifier = Modifier) {
 
 /**
  * 错误波纹动画
+ * @param reduceAnimations 低端机模式：减少波纹数量
  */
 @Composable
-private fun ErrorRippleAnimation(modifier: Modifier = Modifier) {
+private fun ErrorRippleAnimation(
+    modifier: Modifier = Modifier,
+    reduceAnimations: Boolean = false
+) {
     var visible by remember { mutableStateOf(true) }
     val infiniteTransition = rememberInfiniteTransition(label = "errorRipple")
-    
-    val ripples = listOf(0, 250, 500).map { delay ->
+
+    // 低端机减少波纹数量：3→1
+    val rippleDelays = if (reduceAnimations) listOf(0) else listOf(0, 250, 500)
+
+    val ripples = rippleDelays.map { delay ->
         infiniteTransition.animateFloat(
             initialValue = 0f, targetValue = 1f,
             animationSpec = infiniteRepeatable(tween(900, easing = LinearEasing, delayMillis = delay), RepeatMode.Restart),

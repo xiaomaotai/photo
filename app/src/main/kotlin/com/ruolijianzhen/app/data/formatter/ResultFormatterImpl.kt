@@ -115,8 +115,15 @@ class ResultFormatterImpl @Inject constructor() : ResultFormatter {
     
     /**
      * 将标签格式化为可读名称
+     * 过滤掉技术性参数名（如 m25_nameC）
      */
     private fun formatLabelToName(label: String): String {
+        // 检测是否为技术性参数名（包含数字+字母组合如 m25_nameC, n01_xxx 等）
+        val technicalPattern = Regex("^[a-z]\\d+[_-]|^\\d+[_-]|[A-Z]$")
+        if (technicalPattern.containsMatchIn(label)) {
+            return "未知物品"
+        }
+
         return label
             .replace("_", " ")
             .split(" ")

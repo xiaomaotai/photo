@@ -34,7 +34,6 @@ import com.ruolijianzhen.app.ui.animation.AdvancedScanningAnimation
 import com.ruolijianzhen.app.ui.animation.ScanningAnimationState
 import com.ruolijianzhen.app.ui.camera.CameraPreview
 import com.ruolijianzhen.app.ui.camera.FocusAnimationIndicator
-import com.ruolijianzhen.app.ui.camera.GridOverlay
 import com.ruolijianzhen.app.ui.components.CompactProgressIndicator
 import com.ruolijianzhen.app.ui.util.CameraPermissionRequest
 import com.ruolijianzhen.app.ui.util.PermissionUtils
@@ -63,10 +62,7 @@ fun MainScreen(
     
     // 闪光灯状态
     var isFlashOn by remember { mutableStateOf(false) }
-    
-    // 网格显示状态
-    var showGrid by remember { mutableStateOf(false) }
-    
+
     // 缩放比例状态
     var currentZoom by remember { mutableFloatStateOf(1f) }
     
@@ -149,14 +145,8 @@ fun MainScreen(
                     CameraPreview(
                         cameraManager = viewModel.cameraManager,
                         modifier = Modifier.fillMaxSize(),
-                        showGrid = showGrid,
                         onZoomChanged = { zoom -> currentZoom = zoom }
                     )
-                    
-                    // 网格线
-                    if (showGrid) {
-                        GridOverlay(modifier = Modifier.fillMaxSize())
-                    }
                 }
                 
                 // 对焦动画
@@ -259,36 +249,6 @@ fun MainScreen(
                                     RoundedCornerShape(12.dp)
                                 )
                             ) {
-                                // 网格开关
-                                DropdownMenuItem(
-                                    text = { 
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                        ) {
-                                            Icon(
-                                                Icons.Default.GridOn,
-                                                null,
-                                                modifier = Modifier.size(20.dp)
-                                            )
-                                            Text("构图网格")
-                                            Spacer(Modifier.weight(1f))
-                                            if (showGrid) {
-                                                Icon(
-                                                    Icons.Default.Check,
-                                                    null,
-                                                    tint = MaterialTheme.colorScheme.primary,
-                                                    modifier = Modifier.size(18.dp)
-                                                )
-                                            }
-                                        }
-                                    },
-                                    onClick = { 
-                                        showGrid = !showGrid
-                                        showMoreMenu = false
-                                    }
-                                )
-                                
                                 // 切换摄像头
                                 DropdownMenuItem(
                                     text = { 

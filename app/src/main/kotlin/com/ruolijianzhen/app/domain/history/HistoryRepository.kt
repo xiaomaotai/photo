@@ -80,6 +80,7 @@ interface HistoryRepository {
 
 /**
  * 历史记录项
+ * 保存完整的ObjectInfo信息
  */
 data class HistoryItem(
     val id: String,
@@ -92,13 +93,37 @@ data class HistoryItem(
     val source: String,
     val thumbnailPath: String? = null,
     val timestamp: Long,
-    val isFavorite: Boolean = false
+    val isFavorite: Boolean = false,
+
+    // 详细信息字段
+    val brand: String? = null,
+    val model: String? = null,
+    val species: String? = null,
+    val priceRange: String? = null,
+    val material: String? = null,
+    val color: String? = null,
+    val size: String? = null,
+    val manufacturer: String? = null,
+    val features: List<String> = emptyList(),
+
+    // 百科知识字段
+    val summary: String? = null,
+    val description: String? = null,
+    val historyText: String? = null,
+    val funFacts: List<String> = emptyList(),
+    val tips: List<String> = emptyList(),
+    val relatedTopics: List<String> = emptyList(),
+
+    // 分类特定字段
+    val objectType: com.ruolijianzhen.app.domain.model.ObjectType = com.ruolijianzhen.app.domain.model.ObjectType.GENERAL,
+    val typeSpecificInfo: Map<String, String> = emptyMap(),
+    val additionalInfo: Map<String, String> = emptyMap()
 ) {
     /**
      * 转换为ObjectInfo
      */
-    fun toObjectInfo(): ObjectInfo {
-        return ObjectInfo(
+    fun toObjectInfo(): com.ruolijianzhen.app.domain.model.ObjectInfo {
+        return com.ruolijianzhen.app.domain.model.ObjectInfo(
             id = id,
             name = name,
             aliases = aliases,
@@ -108,7 +133,25 @@ data class HistoryItem(
             confidence = confidence,
             source = com.ruolijianzhen.app.domain.model.RecognitionSource.fromString(source),
             imageUrl = thumbnailPath,
-            isFavorite = isFavorite
+            isFavorite = isFavorite,
+            brand = brand,
+            model = model,
+            species = species,
+            priceRange = priceRange,
+            material = material,
+            color = color,
+            size = size,
+            manufacturer = manufacturer,
+            features = features,
+            summary = summary,
+            description = description,
+            history = historyText,
+            funFacts = funFacts,
+            tips = tips,
+            relatedTopics = relatedTopics,
+            objectType = objectType,
+            typeSpecificInfo = typeSpecificInfo,
+            additionalInfo = additionalInfo
         )
     }
 }

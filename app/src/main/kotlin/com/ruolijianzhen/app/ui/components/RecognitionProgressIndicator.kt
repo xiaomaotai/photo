@@ -13,6 +13,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.ui.graphics.vector.ImageVector
 import com.ruolijianzhen.app.domain.model.RecognitionProgress
 import com.ruolijianzhen.app.domain.model.RecognitionStage
 
@@ -67,9 +70,11 @@ fun RecognitionProgressIndicator(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 // 阶段图标
-                Text(
-                    text = getStageIcon(progress.stage),
-                    fontSize = 20.sp
+                Icon(
+                    imageVector = getStageIcon(progress.stage),
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = getStageColor(progress.stage)
                 )
                 
                 // 阶段名称
@@ -258,15 +263,15 @@ private fun StepDot(
 /**
  * 获取阶段图标
  */
-private fun getStageIcon(stage: RecognitionStage): String {
+private fun getStageIcon(stage: RecognitionStage): ImageVector {
     return when (stage) {
-        RecognitionStage.PREPARING -> "📷"
-        RecognitionStage.OFFLINE_RECOGNITION -> "🔍"
-        RecognitionStage.API_RECOGNITION -> "☁️"
-        RecognitionStage.AI_RECOGNITION -> "🤖"
-        RecognitionStage.KNOWLEDGE_ENHANCEMENT -> "📚"
-        RecognitionStage.COMPLETED -> "✅"
-        RecognitionStage.FAILED -> "❌"
+        RecognitionStage.PREPARING -> Icons.Default.CameraAlt
+        RecognitionStage.OFFLINE_RECOGNITION -> Icons.Default.Search
+        RecognitionStage.API_RECOGNITION -> Icons.Default.Cloud
+        RecognitionStage.AI_RECOGNITION -> Icons.Default.SmartToy
+        RecognitionStage.KNOWLEDGE_ENHANCEMENT -> Icons.Default.AutoStories
+        RecognitionStage.COMPLETED -> Icons.Default.CheckCircle
+        RecognitionStage.FAILED -> Icons.Default.Cancel
     }
 }
 
